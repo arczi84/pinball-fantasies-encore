@@ -1,8 +1,11 @@
 #include "engine/table/Gameshow.h"
 
+#include <algorithm>
+
 namespace encore {
 
 Gameshow::Gameshow(ByteView prg) : Flow(prg, 2) {
+  for (u16 i = 0; i < 4; ++i) maniaAt_[i] = b(static_cast<u16>(0x129f + i));
   bindRules();
   bindSteps();
   bindNative(0x0004, [this] { lightsOut(); });
@@ -135,6 +138,7 @@ void Gameshow::restorePlayer() {
   w(0x03a3) = w(static_cast<u16>(player + 0x0289));
   b(0x01be) = b(static_cast<u16>(player + 0x027b));
   b(0x01bf) = b(static_cast<u16>(player + 0x027c));
+  if (amended) maniaAt();
   if (b(0x01be) == 0) return;
   b(0x01b7) = b(0x01b9) = b(0x01ba) = 2;
   for (u8 light : {u8{0x0d}, u8{0x0e}, u8{0x0f}}) setLight(light);
@@ -168,6 +172,20 @@ void Gameshow::threeDigits(u16 value, u16 at) {
     if (digit == 0 && i == 0) digit = 0xfff3;
     b(static_cast<u16>(at + i)) = static_cast<u8>(digit + 0x37);
   }
+}
+
+/// (amended) The loop's message, MONEY MANIA AT, with the number this player's own trips round
+/// it make: cs:1beb writes the next one into it past the twelfth trip, but it is one message for
+/// all the players and the original never writes it back, so a player could be shown the number
+/// of whoever passed twelve last.
+void Gameshow::maniaAt() {
+  for (u16 i = 0; i < 4; ++i) b(static_cast<u16>(0x129f + i)) = maniaAt_[i];
+  const u16 trips = w(0x03a3);
+  if (trips <= 12) return;
+  // as cs:1beb last wrote it: at this trip, or at the one before it on a sixth
+  const u16 next = static_cast<u16>(trips % 6 != 0 ? (trips / 6 + 1) * 6 : trips);
+  threeDigits(std::min<u16>(next, 96), 0x129f);  // (a hundred or more is written one place on,
+  if (next >= 0x64) threeDigits(next, 0x12a0);     // over the end of the one before it)
 }
 
 void Gameshow::prizeLit(u16 flag, u16 record, u8 light, bool outOfStepLight, u16 other1, u16 other2) {
