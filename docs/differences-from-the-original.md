@@ -94,6 +94,7 @@ online high-score list at the time of writing (17) was played again the same way
 |---|---|
 | A ball let out of the vault or off the wheel keeps the spin it came with. | The same, but the spin had been drawn afresh all the while it was held. |
 | For the second that the pair of door targets flashes after both were hit, another hit on either counts as both again. | It counts as one. |
+| In a game of several players, MONEY MANIA AT shows the number each player's own trips round the loop make. | The number is written into one message for all the players, so a player can be shown the one of whoever last passed twelve trips. |
 
 **Stones 'n Bones**
 

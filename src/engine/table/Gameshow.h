@@ -2,6 +2,8 @@
 // Billion Dollar Gameshow's own rules (TABLE3.PRG, cs:0000 to cs:2228), on the engine the
 // tables share. Addresses here are this table's own. Routines are named by where they are in
 // the program until what they are for is clearer.
+#include <array>
+
 #include "engine/table/Flow.h"
 
 namespace encore {
@@ -81,7 +83,9 @@ class Gameshow : public Flow {
   /// and with all three of its row lit the way to collect them opens.
   void prizeLit(u16 flag, u16 record, u8 light, bool outOfStepLight, u16 other1, u16 other2);
   void threeDigits(u16 value, u16 at);
+  void maniaAt();
   bool bothShown_ = false;  ///< the pair of door targets is flashing for both having been hit
+  std::array<u8, 4> maniaAt_{};  ///< the loop's message's number as the program begins it (ds:129f)
 };
 
 }  // namespace encore
