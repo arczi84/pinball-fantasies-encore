@@ -224,6 +224,31 @@ TEST(a_game_counts_at_the_gentlest_angle_it_had) {
   CHECK_EQ(verify(prg, mod, higher).angle, 1);
 }
 
+// A game left paused is not a longer game: only the time played counts towards the limit.
+TEST(the_pause_does_not_count_towards_the_length_limit) {
+  if (!haveData()) return;
+  const Bytes prg = read("TABLE2.PRG"), mod = read("TABLE2.MOD");
+  const Recording honest = play(1, 60000, 5);
+  CHECK(honest.games.size() == 1);
+  if (honest.games.empty()) return;
+  // paused a third of the way in, for as long as the whole game took
+  const int length = static_cast<int>(honest.games[0].endFrame), during = length / 3;
+  const Recording paused = play(1, 60000 + length, 5, Config::defaults().highScores[0], [=, f = 0](TableGame& t) mutable {
+    if (f == during || f == during + length) t.key(Key::P, true), t.key(Key::P, false);
+    ++f;
+  });
+  CHECK(paused.games.size() == 1);
+  CHECK(paused.frames > static_cast<u32>(length));
+  // allowed half the pause and more: taken; allowed less than was played: not
+  VerifyLimits limits;
+  limits.maxPlayed = paused.frames - static_cast<u32>(length / 2);
+  CHECK(verify(prg, mod, paused, limits).ok);
+  limits.maxPlayed = (paused.frames - static_cast<u32>(length)) / 2;
+  const Verdict v = verify(prg, mod, paused, limits);
+  CHECK(!v.ok);
+  CHECK(v.reason == "longer than allowed");
+}
+
 // A flipper's replacement picture turns about the point its own artwork hinges on, which is
 // not always where the table has the ball bounce off it: the upper bats of Party Land and
 // Speed Devils are the lower bats' pictures, hinged several dots from there.

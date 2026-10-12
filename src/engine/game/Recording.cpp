@@ -189,12 +189,14 @@ Recording replay(ByteView prg, ByteView module, const Recording& recording, HowP
   TableGame t(prg, module, recording.table, setup);
   t.playBack(&recording);
   std::size_t next = 0;
+  u32 played = 0;
   for (u32 f = 0; f < recording.frames && !t.left(); ++f) {
     for (; next < recording.events.size() && recording.events[next].frame == f; ++next)
       if (recording.events[next].isKey()) t.key(recording.events[next].key(), recording.events[next].down());
+    if (!t.paused()) ++played;
     t.frame();
   }
-  if (how) *how = {t.playedWithCheats(), t.gentlestAngle()};
+  if (how) *how = {t.playedWithCheats(), t.gentlestAngle(), played};
   return t.recording();
 }
 
@@ -222,6 +224,8 @@ Verdict verify(ByteView prg, ByteView module, const Recording& rec, const Verify
   // (the header says what the player's game had; the replay what the table really did: a
   // recording made by hand can type a cheat's word before the start)
   if (how.cheats) return refuse("played with cheats");
+  // (a game left paused, even for hours, is not a longer game)
+  if (how.played > limits.maxPlayed) return refuse("longer than allowed");
   v.angle = how.angle;
   v.claimsMatch = v.replayed.games == rec.games && v.replayed.events == rec.events;
   v.ok = true;

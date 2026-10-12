@@ -86,6 +86,7 @@ struct Recording {
 struct HowPlayed {
   bool cheats = false;
   int angle = -1;  ///< the gentlest it was played at, 0 low to 2 higher; -1 if no game started
+  u32 played = 0;  ///< the frames not paused
 };
 
 /// Plays a recording again from the table's files, and returns what that recorded: for a
@@ -94,7 +95,8 @@ Recording replay(ByteView prg, ByteView module, const Recording& recording, HowP
 
 /// What a server will take.
 struct VerifyLimits {
-  u32 maxFrames = 60 * 60 * 60 * 3;  ///< three hours
+  u32 maxPlayed = 60 * 60 * 60 * 3;    ///< three hours, the pause left out
+  u32 maxFrames = 60 * 60 * 60 * 24;   ///< and a day in all, to bound the time the replay takes
   std::size_t maxEvents = 2'000'000;
 };
 
