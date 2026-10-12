@@ -166,7 +166,8 @@ One whole game, by one player, played to its end without cheats (no tilt, slow m
 more balls than the options give), with initials typed for it, in a recording format the
 verifier can play. What the replay does is what counts, not what the recording's header says:
 a cheat's word typed into the recording before the start is seen as the game starts, and a game
-whose angle was changed while paused counts as played at the gentlest angle it had.
+whose angle was changed while paused counts as played at the gentlest angle it had. A game may
+last three hours played; the time it was paused is not counted, up to a day in all.
 
 A recording that plays again to anything other than its own games and keys is rejected, as one
 that does not play to what it says. Each game's seed (what every chance in it is drawn from)

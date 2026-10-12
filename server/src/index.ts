@@ -70,7 +70,7 @@ export interface Env {
 
 /** Recording formats a verifier can play (Recording::kFormat in the game). */
 const FORMATS = [3];
-/** A recording is a few KB; a game of three hours, the most the verifier plays, well under this. */
+/** A recording is a few KB; a game of three hours played, the most the verifier takes, well under this. */
 const MAX_RECORDING = 256 * 1024;
 const MAX_PENDING_PER_PLAYER = 50;
 const MAX_RUNS_PER_DAY = 300;
