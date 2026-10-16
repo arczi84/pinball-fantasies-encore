@@ -13,6 +13,7 @@
 #include <thread>
 #include <utility>
 
+#include "core/DataMove.h"
 #include "core/Error.h"
 #include "core/File.h"
 #include "core/Log.h"
@@ -162,7 +163,12 @@ bool App::init() {
     log::error(std::string("SDL_Init: ") + SDL_GetError());
     return false;
   }
+  // Portable (a portable.txt beside the program) is read first: the system's folder is then
+  // not so much as made.
+  portable_ = portableMode();
   saveDir_ = preferencesDir();
+  if (portable_) log::info("portable: the game's things are in " + saveDir_.string());
+  discardStaleMove(saveDir_);
   shaderDir_ = executableDir() / "shaders";
   // Whether the server has newer HD pictures is asked at once, so that the answer is usually
   // there by the time the question could be put.
@@ -249,6 +255,7 @@ bool App::init() {
   // Options and high scores live in this version's own folder, never in the game folder.
   config_ = Config::load(saveDir_, files_.directory);
   if (options_.resolution) config_.options.resolution = *options_.resolution;
+  config_.options.portable = portable_;
 
   if (!offerArt()) return false;
   // Gone to fetch the new release: the game ends here, as when it is quit.
@@ -421,8 +428,10 @@ void App::showLooks() {
   config_.options.originalSound = !balancedSound_;
   config_.options.originalPictures = !renderer_.hdEnabled();
   config_.options.dotMatrixTop = dotMatrixTop_;
+  config_.options.portable = portable_;
   if (intro_) {
-    intro_->setLooks(config_.options.originalSound, config_.options.originalPictures, dotMatrixTop_);
+    intro_->setLooks(config_.options.originalSound, config_.options.originalPictures, dotMatrixTop_, portable_, portableLock_,
+                     portableError_);
     intro_->music().setBalanced(balancedSound_);
   }
   if (table_) table_->music().setBalanced(balancedSound_);
@@ -451,7 +460,9 @@ void App::openIntro(int returningFrom) {
   const auto mod = file::readAll(returningFrom < 0 ? files_.introMusic : files_.menuMusic);
   if (!prg || !mod) throw DataError("cannot read INTRO.PRG or its music");
   showLooks();  // (into the options the menu is made with)
-  intro_ = std::make_unique<encore::Front>(*prg, *mod, config_, returningFrom);
+  // (whether PORTABLE can be changed is looked into now, for the options page the menu has)
+  portableLock_ = portableLock(!portable_, dataSize(saveDir_));
+  intro_ = std::make_unique<encore::Front>(*prg, *mod, config_, returningFrom, portableLock_, portableError_);
   showLooks();
   intro_->setPanelStrip(panelStrip_[0], panelStrip_[1]);
   resizeFrame(encore::Front::kWidth, intro_->height(), 1.0);
@@ -693,19 +704,24 @@ void App::update(double dt) {
       const encore::Front::Action a = intro_->frame();
       // (without a sound card nothing else moves the music on, and the pictures wait for it)
       if (!sound_) intro_->noSound();
+      if (portableError_ && intro_->portableErrorShown()) portableError_ = false;
       switch (a.kind) {
         case Kind::OpenTable:
           config_.options = intro_->options();
           openTable(a.table);
           break;
-        case Kind::SaveOptions:
+        case Kind::SaveOptions: {
           config_.options = intro_->options();
+          const bool wantPortable = config_.options.portable;
           Config::saveOptions(saveDir_, config_.options);
-          // and this version's two, as the page left them
+          // and this version's own, as the page left them
           if (config_.options.originalSound == balancedSound_) setBalancedSound(!config_.options.originalSound);
           if (config_.options.originalPictures == renderer_.hdEnabled()) setHd(!config_.options.originalPictures);
           if (config_.options.dotMatrixTop != dotMatrixTop_) setDotMatrixTop(config_.options.dotMatrixTop);
+          // (last: everything above is saved where the things are now, and goes with them)
+          if (wantPortable != portable_) movePortable(wantPortable);
           break;
+        }
         case Kind::Quit: running_ = false; return;
         case Kind::None: break;
       }
@@ -1102,6 +1118,77 @@ int App::run() {
 void App::systemKeys(bool off) {
   window_.setPlaying(off);
   systemShortcutsOff(off);
+}
+
+/// Everything the game keeps goes to the program's own folder, with a portable.txt beside the
+/// program to say so, or back to the system's folder for it (core/DataMove.h): one copy of it
+/// all, so a score made while portable comes home with it. Only from the menu, with no table
+/// open and nothing being sent. Should it fail, nothing has moved, and the options say so
+/// (PORTABLE: ERROR) the next time they are opened; the log says why.
+void App::movePortable(bool on) {
+  const std::filesystem::path from = saveDir_, to = on ? programDir() : osPreferencesDir(), marker = portableMarker();
+  // (a game being sent has its recording open, which could not be moved from under it)
+  const auto began = std::chrono::steady_clock::now();
+  const auto seconds = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count(); };
+  bool closed = false;
+  const auto pollEvents = [&] {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+      if (event.type == SDL_EVENT_QUIT) closed = true;
+      windowEvent(event);
+    }
+  };
+  while (sender_ && !sender_->idle()) {
+    pollEvents();
+    drawWaiting(seconds(), "WAITING FOR A GAME TO BE SENT");
+    SDL_Delay(16);
+  }
+  if (sender_) sender_->join();
+
+  const std::uintmax_t bytes = dataSize(from);
+  std::atomic<std::uintmax_t> done{0};
+  std::atomic<bool> finished{false};
+  MoveReport report;
+  std::thread worker([&] {
+    report = moveData(
+        from, to,
+        [&]() -> std::string {
+          std::error_code ec;
+          if (on) return file::writeAll(marker, ByteView(reinterpret_cast<const u8*>("1"), 1)) ? "" : "cannot write " + marker.string();
+          std::filesystem::remove(marker, ec);
+          return ec ? "cannot remove " + marker.string() + ": " + ec.message() : "";
+        },
+        [&](std::uintmax_t copied) { done = copied; });
+    finished = true;
+  });
+  while (!finished) {
+    pollEvents();
+    drawWaiting(seconds(), on ? "MOVING THE GAME'S FILES TO ITS FOLDER" : "MOVING THE GAME'S FILES HOME",
+                std::to_string(done / 1048576) + " OF " + megabytes(bytes));
+    SDL_Delay(16);
+  }
+  worker.join();
+  if (closed) running_ = false;
+
+  if (report.ok) {
+    portable_ = on;
+    saveDir_ = to;
+    log::info("portable: the game's things are now in " + saveDir_.string());
+    if (!options_.dataDir) {
+      try {
+        files_ = GameFiles::fromDirectory(saveDir_ / "FANTASY");
+      } catch (const DataError& e) {
+        log::error(std::string("portable: ") + e.what());
+      }
+    }
+    sender_ = std::make_unique<ScoreSender>(saveDir_);
+    sender_->send();
+  } else {
+    log::error("portable: the game's files could not be moved, " + report.step + ": " + report.why);
+    portableError_ = true;
+  }
+  portableLock_ = portableLock(!portable_, dataSize(saveDir_));
+  showLooks();
 }
 
 }  // namespace encore

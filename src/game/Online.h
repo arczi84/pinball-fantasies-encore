@@ -28,6 +28,13 @@ class ScoreSender {
   void queue(const std::filesystem::path& recording);
   /// Sends what is in the outbox, in the background, unless that is already happening.
   void send();
+  /// Whether nothing is being sent now.
+  bool idle() const { return !busy_->load(); }
+  /// Waits for the sending thread, once it is idle (the outbox's files are then closed and the
+  /// folder can be moved).
+  void join() {
+    if (thread_.joinable() && idle()) thread_.join();
+  }
 
  private:
   std::filesystem::path saveDir_;

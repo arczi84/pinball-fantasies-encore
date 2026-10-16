@@ -46,6 +46,7 @@ endif()
 add_library(encore_core STATIC
   src/core/Log.cpp
   src/core/File.cpp
+  src/core/DataMove.cpp
   src/core/Png.cpp
   src/core/Inflate.cpp
   src/core/Zip.cpp

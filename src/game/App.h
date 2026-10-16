@@ -98,6 +98,8 @@ class App {
   void setBallTrail(bool on);
   void setDotMatrixTop(bool on);
   void systemKeys(bool off);
+  /// PORTABLE changed in the options: the game's things moved to the program's folder, or back.
+  void movePortable(bool on);
 
   AppOptions options_;
   std::filesystem::path shaderDir_, saveDir_;
@@ -118,6 +120,9 @@ class App {
   bool ballTrail_ = true;      ///< the fading ghosts behind the ball
   bool dotMatrixTop_ = false;  ///< the dot display above the table (the Amiga's place) rather than below
   bool balancedSound_ = true;  ///< this version's mixing rather than the driver's (MusicDriver::setBalanced)
+  bool portable_ = false;      ///< the game's things are in the program's folder (Options::portable)
+  PortableLock portableLock_ = PortableLock::None;  ///< why PORTABLE cannot be changed now, if it cannot
+  bool portableError_ = false; ///< the last change of it failed, which the options are yet to show
   std::unique_ptr<encore::Front> intro_;
   std::unique_ptr<encore::TableGame> table_;
   int tableIndex_ = 0;  ///< which table is open
