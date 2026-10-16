@@ -54,10 +54,17 @@ void Window::setFullscreen(bool on) {
   SDL_SetWindowFullscreen(window_, on);
   // Fullscreen, the keys go to the game rather than to the system: no window switching on
   // Alt-Tab, no menu on the Windows or Super key. Alt-Tab still works, so nobody is trapped,
-  // and in a window the system keeps its shortcuts, where the player expects them.
-  SDL_SetWindowKeyboardGrab(window_, on);
+  // and in a window the system keeps its shortcuts, where the player expects them, but while
+  // a ball is in play.
+  SDL_SetWindowKeyboardGrab(window_, on || playing_);
   // Fullscreen there is nothing else on the screen for the pointer to do.
   if (on) hidePointer(true);
+}
+
+void Window::setPlaying(bool on) {
+  if (on == playing_) return;
+  playing_ = on;
+  SDL_SetWindowKeyboardGrab(window_, fullscreen_ || on);
 }
 
 void Window::hidePointer(bool hide) {

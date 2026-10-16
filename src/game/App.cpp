@@ -22,6 +22,7 @@
 #include "game/Release.h"
 #include "platform/DataLocator.h"
 #include "platform/ImageFile.h"
+#include "platform/SystemKeys.h"
 
 namespace encore {
 namespace {
@@ -1051,6 +1052,8 @@ int App::run() {
       if (options_.video)
         while (running_ && replaying_ && replayFrame_ < static_cast<u32>(options_.videoFrom * 60)) update(kFrame);
       update(dt);
+      systemKeys(table_ && !replaying_ && !table_->waiting() && !table_->paused() &&
+                 (SDL_GetWindowFlags(window_.handle()) & SDL_WINDOW_INPUT_FOCUS) != 0);
       if (options_.stats) {
         using ms = std::chrono::duration<double, std::milli>;
         stats_.update += ms(clock::now() - beforeUpdate).count();
@@ -1076,16 +1079,29 @@ int App::run() {
   } catch (const std::exception& e) {
     // Whatever went wrong, it is said out loud rather than ending the program in silence.
     log::error(e.what());
+    systemKeys(false);
     reportError(e.what());
     audio_.close();
     SDL_Quit();
     return 1;
   }
   if (clip_) endClip();
+  systemKeys(false);
   audio_.setSource({});
   audio_.close();
   SDL_Quit();
   return 0;
+}
+
+/// The system's shortcuts are a key away from the game's: on macOS Cmd+Space opens Spotlight,
+/// which a thumb heading for the space bar to nudge the table finds too easily, and the Globe
+/// key the emoji; on Windows Shift pressed five times asks about Sticky Keys, and the right
+/// flipper held for eight seconds about Filter Keys. While a ball is in play in the window in
+/// front, the keys are the game's and those shortcuts are off; they are back as soon as it is
+/// not: paused, between games, in the menu, in another window.
+void App::systemKeys(bool off) {
+  window_.setPlaying(off);
+  systemShortcutsOff(off);
 }
 
 }  // namespace encore

@@ -76,6 +76,7 @@ add_executable(pinball-fantasies WIN32 MACOSX_BUNDLE
   src/platform/AudioDevice.cpp
   src/platform/ImageFile.cpp
   src/platform/Http.cpp
+  src/platform/SystemKeys.cpp
   src/game/Art.cpp
   src/game/Fantasy.cpp
   src/game/Release.cpp

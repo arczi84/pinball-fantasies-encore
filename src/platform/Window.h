@@ -17,6 +17,8 @@ class Window {
   void swap();
   void setFullscreen(bool on);
   bool fullscreen() const { return fullscreen_; }
+  /// While a ball is in play the keys go to the game, in a window too (see setFullscreen).
+  void setPlaying(bool on);
   /// The pointer out of the way over the game (nothing in it is played with the mouse), or back.
   void hidePointer(bool hide);
   void drawableSize(int& w, int& h) const;
@@ -26,6 +28,7 @@ class Window {
   SDL_Window* window_ = nullptr;
   SDL_GLContext context_ = nullptr;
   bool fullscreen_ = false;
+  bool playing_ = false;
 };
 
 }  // namespace encore
