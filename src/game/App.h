@@ -97,6 +97,7 @@ class App {
   void showLooks();
   void setBallTrail(bool on);
   void setDotMatrixTop(bool on);
+  void systemKeys(bool off);
 
   AppOptions options_;
   std::filesystem::path shaderDir_, saveDir_;

@@ -119,6 +119,10 @@ The original key layout.
 
 \* Or the number keys <kbd>1</kbd> – <kbd>8</kbd>.
 
+While a ball is in play the keys are the game's: the system's own shortcuts (Spotlight, the
+emoji on the Globe key, <kbd>⌘</kbd> <kbd>Tab</kbd>, the Windows key, the Sticky Keys question
+after five Shifts) wait until you pause.
+
 **Paused**
 
 | Key | What it does |
