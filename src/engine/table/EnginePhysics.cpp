@@ -451,15 +451,36 @@ void Engine::runRules() {
   hitTriggers();
   call(F(0x0fcc));
   if (std::exchange(nudgeDue_, false)) {
+    freeTrappedBall();
     const u8 key = B(at::lastKey);
     nudgeKey();
     B(at::lastKey) = key;
+  }
+  if (amended) {  // (how long the ball in play has stood still, as of this frame: for freeTrappedBall)
+    const i16 x = W(at::ballX).s(), y = W(at::ballY).s();
+    restFrames_ = B(at::ballHidden) != 0xff && x == restX_ && y == restY_ ? restFrames_ + 1 : 0;
+    restX_ = x, restY_ = y;
   }
   displayFlash();
   call(W(0x338c));
   W(0x338c) = F(0x69fc);
   runTimers();
   runBlinks();
+}
+
+/// (amended) A ball that had stood still for a second in one of the table's traps (traps_) is
+/// set rolling by a shake: the shake lifts it as anywhere, and it goes off sideways as well.
+/// Only a ball resting there (as of the frame before: the shake has moved it by now), not one
+/// rolling through; and as a ball resting there never left before, no game that was ever
+/// finished plays any differently.
+void Engine::freeTrappedBall() {
+  if (restFrames_ < 60) return;
+  for (const Trap& t : traps_) {
+    if (restX_ < t.left || restX_ > t.right || restY_ < t.top || restY_ > t.bottom) continue;
+    W(at::ballVx) = static_cast<u16>(t.vx);
+    restFrames_ = 0;
+    return;
+  }
 }
 
 /// cs:5d70: rectangles the ball rolls into, each with the routine to run when it does.
