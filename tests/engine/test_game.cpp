@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <functional>
 #include <string>
+#include <utility>
 
 #include "GameDir.h"
 #include "Test.h"
@@ -247,6 +248,38 @@ TEST(the_pause_does_not_count_towards_the_length_limit) {
   const Verdict v = verify(prg, mod, paused, limits);
   CHECK(!v.ok);
   CHECK(v.reason == "longer than allowed");
+}
+
+// A soft shot that dies on the steel edge at the top of Party Land, right of the tower, balances
+// there; with soft hits traded as their numbers say, no nudge used to shake it off, and the game
+// could only be quit. A player's own game where that happened (tests/recordings/stuck, stopped
+// four minutes after it stuck): the ball is there before the first nudge after it stuck, and
+// rolling away down the right side two seconds after it.
+TEST(a_ball_balanced_on_party_lands_top_edge_is_nudged_off) {
+  if (!haveData()) return;
+  const auto data = file::readAll(std::filesystem::path(ENCORE_SOURCE_DIR) / "tests" / "recordings" / "stuck" /
+                                  "FANTASY-PARTYLND-stuck-at-the-top.RPL");
+  const auto rec = data ? Recording::load(*data) : std::nullopt;
+  CHECK(rec.has_value());
+  if (!rec) return;
+  TableGame::Setup setup;
+  setup.options = rec->options;
+  setup.highScores = rec->highScores;
+  setup.seed = rec->seed;
+  setup.carry = rec->carry;
+  setup.picture = false;
+  TableGame t(read("TABLE1.PRG"), read("TABLE1.MOD"), rec->table, setup);
+  t.playBack(&*rec);
+  constexpr u32 kNudge = 20495;  // (5:41.58, the player's first nudge after the ball stuck)
+  std::size_t next = 0;
+  auto ball = [&] { return std::pair<int, int>{t.engine().W(at::ballX).s(), t.engine().W(at::ballY).s()}; };
+  for (u32 f = 0; f < kNudge + 120; ++f) {
+    for (; next < rec->events.size() && rec->events[next].frame == f; ++next)
+      if (rec->events[next].isKey()) t.key(rec->events[next].key(), rec->events[next].down());
+    t.frame();
+    if (f == kNudge - 30) CHECK((ball() == std::pair<int, int>{187, 15}));  // resting on the edge
+  }
+  CHECK(ball().first > 250);  // and two seconds after the nudge, well away down the right
 }
 
 // A flipper's replacement picture turns about the point its own artwork hinges on, which is

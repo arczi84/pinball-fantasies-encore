@@ -77,6 +77,7 @@ online high-score list at the time of writing (17) was played again the same way
 | The match runs through 22 digits. | 23 at this screen speed. |
 | The skill shot's award is given once. | Twice. |
 | When the ball is put in its hole at the top (arcade, tunnel, secret), the screen is held where it is from that moment and taken up from that frame on. | The screen is taken up by timers that start a frame or two later; until then it sets off after the ball. |
+| A ball that has come to rest for a second on the steel edge at the top, right of the tower, is sent on to the right by a nudge. (With soft hits on steel traded as their numbers say, see "The ball", a ball balanced there stays balanced through any number of nudges.) | The nudge shakes it off, through the overflowing sums for a soft hit. |
 | After the side lane's extra ball, a ball that drains is not taken as lost for ten seconds. | For ten seconds, or until the award's jingle is over, whichever comes first. |
 
 **Speed Devils**

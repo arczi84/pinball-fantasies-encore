@@ -6,6 +6,7 @@
 #include <random>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "engine/table/Program.h"
 
@@ -313,6 +314,18 @@ class Engine : public Program {
   bool startsNow_ = false;             ///< a timer started now is one of the latter
   bool timersRunning_ = false;
   bool lostParked_ = false;  ///< a ball was lost and the next has not been put on the plunger yet
+  /// (amended) Where a ball can come to rest and never leave, as a table says (a box of the
+  /// ball's places, and the speed across a shake gives it there): with whole gains (wholeGains) a ball
+  /// balanced on a steel edge stays balanced, where the original's sums for a soft touch shake
+  /// it off at the first nudge. A shake while it rests in one sets it rolling (freeTrappedBall).
+  struct Trap {
+    i16 left, top, right, bottom;
+    i16 vx;
+  };
+  std::vector<Trap> traps_;
+  int restFrames_ = 0;       ///< (amended) frames the ball in play has stood still
+  i16 restX_ = 0, restY_ = 0;
+  void freeTrappedBall();
   bool nudgeDue_ = false;
   bool ballDrawn_ = false;  ///< the original drew the ball in this frame  ///< the table was shaken: counted when the frame's rules are run
   bool spinDue_ = false;  ///< the ball was put somewhere: its spin is drawn when it next moves

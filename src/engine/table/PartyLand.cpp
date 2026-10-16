@@ -9,6 +9,10 @@ constexpr u8 kKeptLights[] = {0x01, 0x02, 0x04, 0x05, 0x06, 0x08, 0x09, 0x29, 0x
 }  // namespace
 
 PartyLand::PartyLand(ByteView prg) : Flow(prg, 0) {
+  // (amended) The top of the table, right of the tower: a soft shot that dies there balances on
+  // the steel edge, at (187,15) or (183,14), and a shake sends it on to the right, down the
+  // side, as the original's sums would.
+  traps_.push_back({182, 12, 190, 17, 128});
   bind(0x000b, [this] { newGameTable(); });
   bind(0x0202, [this] {  // the music a game opens with
     music(0x0c87);
