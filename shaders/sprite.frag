@@ -2,8 +2,8 @@
 // Draws a flipper as one picture turned to the angle the table computes, instead of the
 // original's twenty-one drawn positions, and the ball as a picture of its own. Runs over the
 // scene, at the window's resolution.
-in vec2 vUv;
 out vec4 fragColor;
+uniform vec2 uTargetSize;    // the scene's size in its own pixels
 uniform sampler2D uSprite;   // the flipper at rest, RGBA, top row first
 uniform usampler2D uMap;     // the replacement-picture map: its low bit marks what covers the flipper
 uniform vec2 uFrameSize;     // screen pixels
@@ -28,7 +28,9 @@ const vec3 kHazeGrey = vec3(0.55);
 const float kMaskBlack = 0.12, kMaskWhite = 0.92;
 
 void main() {
-  vec2 f = vec2(vUv.x, 1.0 - vUv.y) * uFrameSize;  // screen rows are top-down
+  // (where this pixel is, exactly, whatever shape is drawn: sprite.vert draws only a box)
+  vec2 uv = gl_FragCoord.xy / uTargetSize;
+  vec2 f = vec2(uv.x, 1.0 - uv.y) * uFrameSize;  // screen rows are top-down
   if (f.y < uClip.x || f.y >= uClip.y) discard;    // never over the dot matrix
   ivec2 p = clamp(ivec2(floor(f)), ivec2(0), ivec2(uFrameSize) - 1);
   // How much artwork is in front: all of it hides the picture, a dithered cover lets it

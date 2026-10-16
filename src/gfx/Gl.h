@@ -44,6 +44,7 @@ bool loadGlFunctions();
   X(PFNGLUNIFORM1UIPROC, glUniform1ui)                          \
   X(PFNGLUNIFORM2FPROC, glUniform2f)                            \
   X(PFNGLUNIFORM3FPROC, glUniform3f)                            \
+  X(PFNGLUNIFORM4FPROC, glUniform4f)                            \
   X(PFNGLUSEPROGRAMPROC, glUseProgram)
 
 #define ENCORE_GL_DECLARE(type, name) extern type name;

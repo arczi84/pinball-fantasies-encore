@@ -119,7 +119,7 @@ void Renderer::clearCoverPictures() { coverLoaded_ = {}; }
 void Renderer::drawSprites(const HdFrame& hd) {
   if (!spritePassLoaded_) {
     spritePassLoaded_ = true;
-    if (!spritePass_.load(shaderDir_ / "fullscreen.vert", shaderDir_ / "sprite.frag"))
+    if (!spritePass_.load(shaderDir_ / "sprite.vert", shaderDir_ / "sprite.frag"))
       log::error("the flipper shader failed to load; the drawn positions are used instead");
   }
   if (!spritePass_.id()) return;
@@ -127,6 +127,7 @@ void Renderer::drawSprites(const HdFrame& hd) {
   glUniform1i(spritePass_.uniform("uMap"), 2);   // still bound from the picture pass
   glUniform1i(spritePass_.uniform("uSprite"), 3);
   glUniform2f(spritePass_.uniform("uFrameSize"), static_cast<float>(hd.width), static_cast<float>(hd.height));
+  glUniform2f(spritePass_.uniform("uTargetSize"), static_cast<float>(hdScene_.w), static_cast<float>(hdScene_.h));
   glUniform1f(spritePass_.uniform("uTint"), hd.spriteTint);
   const auto layer = static_cast<std::size_t>(hd.ballLayer != 0 ? 1 : 0);
   glUniform1ui(spritePass_.uniform("uHasCover"), coverLoaded_[layer] ? 1u : 0u);
@@ -141,8 +142,27 @@ void Renderer::drawSprites(const HdFrame& hd) {
   glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glActiveTexture(GL_TEXTURE3);
+  const float frameW = static_cast<float>(hd.width), frameH = static_cast<float>(hd.height);
   for (const HdSprite& s : hd.sprites) {
     if (s.picture >= kSprites || !spriteTex_[s.picture] || !spriteSize_[s.picture][0]) continue;
+    // Where on the screen the picture can be: its four corners, turned about the hinge as the
+    // fragment shader turns the screen into the picture, and the rows it is clipped to. Only
+    // that box is drawn (shaders/sprite.vert): everywhere else the shader would draw nothing.
+    if (s.scaleX == 0 || s.scaleY == 0) continue;
+    const float c = std::cos(s.angle), n = std::sin(s.angle);
+    float x0 = frameW, y0 = frameH, x1 = 0, y1 = 0;
+    for (const float cx : {0.0f, 1.0f})
+      for (const float cy : {0.0f, 1.0f}) {
+        const float rx = (cx - s.pivotSpriteX) / s.scaleX, ry = (cy - s.pivotSpriteY) / s.scaleY;
+        const float fx = s.pivotFrameX + c * rx - n * ry, fy = s.pivotFrameY + n * rx + c * ry;
+        x0 = std::min(x0, fx), x1 = std::max(x1, fx), y0 = std::min(y0, fy), y1 = std::max(y1, fy);
+      }
+    // (a frame dot more all round, for the screen's pixels that straddle the edge)
+    x0 = std::max(x0 - 1, 0.0f), x1 = std::min(x1 + 1, frameW);
+    y0 = std::max({y0 - 1, s.clipTop, 0.0f}), y1 = std::min({y1 + 1, s.clipBottom, frameH});
+    if (x0 >= x1 || y0 >= y1) continue;
+    // (the screen's rows are top-down, vUv's bottom-up)
+    glUniform4f(spritePass_.uniform("uBox"), x0 / frameW, 1 - y1 / frameH, x1 / frameW, 1 - y0 / frameH);
     glBindTexture(GL_TEXTURE_2D, spriteTex_[s.picture]);
     glUniform2f(spritePass_.uniform("uPivotFrame"), s.pivotFrameX, s.pivotFrameY);
     glUniform2f(spritePass_.uniform("uPivotSprite"), s.pivotSpriteX, s.pivotSpriteY);
@@ -151,7 +171,7 @@ void Renderer::drawSprites(const HdFrame& hd) {
     glUniform2f(spritePass_.uniform("uClip"), s.clipTop, s.clipBottom);
     glUniform1ui(spritePass_.uniform("uHiddenBy"), s.hiddenBy);
     glUniform1f(spritePass_.uniform("uOpacity"), s.opacity);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
   }
   glDisable(GL_BLEND);
   glActiveTexture(GL_TEXTURE0);
