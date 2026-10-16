@@ -27,7 +27,10 @@ class Front {
   /// `prg` is INTRO.PRG; `module` is INTRO.MOD the first time and MOD2.MOD after a table.
   /// `returningFrom` is the table come back from (0 to 3), or -1 the first time, which shows
   /// the slides. `scores` are the four tables' best scores, for its pages of them.
-  Front(ByteView prg, ByteView module, const Config& config, int returningFrom);
+  /// `portableLock` says why PORTABLE cannot be changed, if it cannot, and `portableError`
+  /// that the last change of it failed (shown as its value the next time the options open).
+  Front(ByteView prg, ByteView module, const Config& config, int returningFrom,
+        PortableLock portableLock = PortableLock::None, bool portableError = false);
   ~Front();
   Front(const Front&) = delete;
   Front& operator=(const Front&) = delete;
@@ -54,13 +57,13 @@ class Front {
   void setPanelStrip(int width, int height) { stripWidth_ = width, stripHeight_ = height; }
   int height() const { return tall() ? 2 * kHeight : kHeight; }
 
-  /// ARTWORK, AUDIO and DOT MATRIX as they are now, whatever the options page last said (keys
-  /// change them anywhere): the page shows them so the next time it opens.
-  void setLooks(bool originalSound, bool originalPictures, bool dotMatrixTop) {
-    options_.originalSound = saved_.originalSound = originalSound;
-    options_.originalPictures = saved_.originalPictures = originalPictures;
-    options_.dotMatrixTop = saved_.dotMatrixTop = dotMatrixTop;
-  }
+  /// ARTWORK, AUDIO, DOT MATRIX and PORTABLE as they are now, whatever the options page last
+  /// said (keys change them anywhere, and a move can fail): the page shows them so the next
+  /// time it opens.
+  void setLooks(bool originalSound, bool originalPictures, bool dotMatrixTop, bool portable,
+                PortableLock portableLock, bool portableError);
+  /// The options were opened with PORTABLE: ERROR shown: it is not to be shown again.
+  bool portableErrorShown() const { return portableErrorShown_; }
   MusicDriver& music() { return music_; }
   void sound(float* out, int frames) { music_.render(out, frames); }
   void noSound() { music_.pass(1.0 / 60); }
@@ -231,6 +234,9 @@ class Front {
     const int page = row < kFirstOptions ? 0 : 1, line = row - (page ? kFirstOptions : 0);
     return &optionsPages_[static_cast<std::size_t>(page)][static_cast<std::size_t>(0x1e + line * 0x18)];
   }
+  void writeOptionWord(int row);   ///< cs:404a: an option's word into its page's text
+  PortableLock portableLock_ = PortableLock::None;
+  bool portableError_ = false, portableErrorShown_ = false;
   bool optionsDone_ = false;       ///< cs:4265
   int launch_ = -1;                ///< a table asked for while a page was shown
   // for the tall screen: what the part beside the panel shows, and which rows of the

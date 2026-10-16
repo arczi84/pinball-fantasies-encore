@@ -77,12 +77,18 @@ constexpr u16 kRemaster = 0x49da;
 constexpr u16 kBalanced = 0x49e4;
 constexpr u16 kBottom = 0x49ee;  ///< (past the question's words too, which are not shown either)
 constexpr u16 kTop = 0x49f5;
-constexpr int kOptions = 9;      ///< the original's six, and ARTWORK, AUDIO and DOT MATRIX
+/// PORTABLE's words, all of eight letters, since a new word is written over the old to its own
+/// length: yes, no, and why it cannot be changed (PortableLock), or that changing it failed.
+constexpr u16 kYes = 0x49fc, kNo = 0x4a05, kReadOnly = 0x4a0e, kNoSpace = 0x4a17, kNotHere = 0x4a20, kMoveApp = 0x4a29,
+              kError = 0x4a32;
+constexpr int kOptions = 10;     ///< the original's six, and ARTWORK, AUDIO, DOT MATRIX and PORTABLE
 
 }  // namespace
 
-Front::Front(ByteView prg, ByteView module, const Config& config, int returningFrom)
-    : music_(48000), options_(config.options), saved_(config.options), returningFrom_(returningFrom) {
+Front::Front(ByteView prg, ByteView module, const Config& config, int returningFrom, PortableLock portableLock,
+             bool portableError)
+    : music_(48000), options_(config.options), saved_(config.options), returningFrom_(returningFrom),
+      portableLock_(portableLock), portableError_(portableError) {
   if (prg.size() < 0x400 + 0x4daa0) throw DataError("INTRO.PRG is not the program it should be");
   image_.assign(prg.begin() + 0x400, prg.end());
   for (auto& plane : planes_) plane.assign(0x10000, 0);
@@ -105,6 +111,13 @@ Front::Front(ByteView prg, ByteView module, const Config& config, int returningF
   std::memcpy(&ds(kBalanced), "BALANCED", 9);
   std::memcpy(&ds(kBottom), "BOTTOM", 7);
   std::memcpy(&ds(kTop), "TOP   ", 7);
+  std::memcpy(&ds(kYes), "YES     ", 9);
+  std::memcpy(&ds(kNo), "NO      ", 9);
+  std::memcpy(&ds(kReadOnly), "READONLY", 9);
+  std::memcpy(&ds(kNoSpace), "NO SPACE", 9);
+  std::memcpy(&ds(kNotHere), "NOT HERE", 9);
+  std::memcpy(&ds(kMoveApp), "MOVE APP", 9);
+  std::memcpy(&ds(kError), "ERROR   ", 9);
   // the first page as the original has it, its six options, with a line to turn to the other
   // before saving; the other with a heading, this version's options and a line to turn back.
   // Each has twelve lines, an empty one a nought, as the page shows twelve and no more
@@ -120,11 +133,11 @@ Front::Front(ByteView prg, ByteView module, const Config& config, int returningF
   copy(firstPage, 0x4edf, 0x4ef8);  // saving, and an empty line
   for (const char c : std::string_view("MORE OPTIONS")) morePage.push_back(static_cast<u8>(c));
   morePage.insert(morePage.end(), {0, 0});
-  for (const char* label : {"  ARTWORK:", "  AUDIO:", "  DOT MATRIX:"}) addLine(morePage, label);
+  for (const char* label : {"  ARTWORK:", "  AUDIO:", "  DOT MATRIX:", "  PORTABLE:"}) addLine(morePage, label);
   morePage.push_back(0);
   addLine(morePage, "  BACK");
   copy(morePage, 0x4edf, 0x4ef8);
-  morePage.insert(morePage.end(), {0, 0, 0});
+  morePage.insert(morePage.end(), {0, 0});
 
   // cs:371f: the best scores, written into the two pages that show them
   static constexpr u16 kRows[4] = {0x4f31, 0x4fc1, 0x5051, 0x50e1};
@@ -151,12 +164,25 @@ Front::Front(ByteView prg, ByteView module, const Config& config, int returningF
     const std::size_t before = (0x18 - name.size()) / 2;
     for (u16 i = 0; i < 0x18; ++i) ds(static_cast<u16>(line + i)) = i >= before && i - before < name.size() ? static_cast<u8>(name[i - before]) : ' ';
   }
-  for (int row = 0; row < kOptions; ++row) {  // cs:404a: the options' words into their page
-    u16 word = 0;
-    optionText(row, word);
-    for (u8* at = optionWord(row); ds(word) != 0; ++word, ++at) *at = ds(word);
-  }
+  for (int row = 0; row < kOptions; ++row) writeOptionWord(row);
   task_ = main();
+}
+
+void Front::writeOptionWord(int row) {
+  u16 word = 0;
+  optionText(row, word);
+  for (u8* at = optionWord(row); ds(word) != 0; ++word, ++at) *at = ds(word);
+}
+
+void Front::setLooks(bool originalSound, bool originalPictures, bool dotMatrixTop, bool portable, PortableLock portableLock,
+                     bool portableError) {
+  options_.originalSound = saved_.originalSound = originalSound;
+  options_.originalPictures = saved_.originalPictures = originalPictures;
+  options_.dotMatrixTop = saved_.dotMatrixTop = dotMatrixTop;
+  options_.portable = saved_.portable = portable;
+  portableLock_ = portableLock;
+  portableError_ = portableError;
+  for (int row = 6; row < kOptions; ++row) writeOptionWord(row);
 }
 
 Front::~Front() = default;
@@ -732,7 +758,16 @@ void Front::optionText(int row, u16& words) {
     // this version's two
     case 6: words = options_.originalPictures ? kOriginal : kRemaster; break;
     case 7: words = options_.originalSound ? kOriginal : kBalanced; break;
-    default: words = options_.dotMatrixTop ? kTop : kBottom; break;
+    case 8: words = options_.dotMatrixTop ? kTop : kBottom; break;
+    default:
+      words = portableError_                              ? kError
+              : portableLock_ == PortableLock::ReadOnly     ? kReadOnly
+              : portableLock_ == PortableLock::NoSpace      ? kNoSpace
+              : portableLock_ == PortableLock::AppFolder    ? kNotHere
+              : portableLock_ == PortableLock::Translocated ? kMoveApp
+              : options_.portable                         ? kYes
+                                                          : kNo;
+      break;
   }
 }
 
@@ -749,6 +784,8 @@ void Front::changeOption(int row) {
     case 6: options_.originalPictures = !options_.originalPictures; break;
     case 7: options_.originalSound = !options_.originalSound; break;
     case 8: options_.dotMatrixTop = !options_.dotMatrixTop; break;
+    // (not while it cannot be changed, or its last change is being shown to have failed)
+    case 9: if (portableLock_ == PortableLock::None && !portableError_) options_.portable = !options_.portable; break;
     default: optionsDone_ = true; break;
   }
   options_.balls = ds(0x49a3) ? 5 : 3;
@@ -862,6 +899,7 @@ Front::Task Front::turnOptions(int page) {
 /// cs:43f4: the options, in place of the banners.
 Front::Task Front::optionsMenu() {
   optionsShown_ = 0;
+  if (portableError_) portableErrorShown_ = true;
   scrollerText_ = 0x2906;
   co_await rubOutBanners();
   showing_ = Showing::Page;
@@ -922,9 +960,14 @@ Front::Task Front::optionsMenu() {
   if (options_.balls != saved_.balls || options_.angle != saved_.angle || options_.scrollSpeed != saved_.scrollSpeed ||
       options_.resolution != saved_.resolution || options_.noMusic != saved_.noMusic || options_.mono != saved_.mono ||
       options_.originalSound != saved_.originalSound || options_.originalPictures != saved_.originalPictures ||
-      options_.dotMatrixTop != saved_.dotMatrixTop) {
+      options_.dotMatrixTop != saved_.dotMatrixTop || options_.portable != saved_.portable) {
     saved_ = options_;
     action_.kind = Action::Kind::SaveOptions;
+  }
+  // (PORTABLE: ERROR was shown this once; the next time the real value is)
+  if (portableError_) {
+    portableError_ = false;
+    writeOptionWord(kOptions - 1);
   }
 }
 

@@ -33,7 +33,17 @@ struct Options {
   bool originalSound = false;
   bool originalPictures = false;
   bool dotMatrixTop = false;
+  /// And portable: the game's things in the program's own folder (a portable.txt beside the
+  /// program says so) rather than the system's folder for them, so that the game can go from
+  /// machine to machine on a card with its scores. Changing it moves them (core/DataMove.h).
+  bool portable = false;
 };
+
+/// Why PORTABLE cannot be changed in the options, if it cannot: the folder it would go to
+/// cannot be written, has no room for the game's things, is one applications are installed
+/// in (/Applications, Program Files), or on macOS is the hidden copy a quarantined
+/// application is run from (the app has to be moved once with Finder first).
+enum class PortableLock { None, ReadOnly, NoSpace, AppFolder, Translocated };
 
 struct HighScore {
   Bcd score;

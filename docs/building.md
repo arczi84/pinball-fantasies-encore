@@ -39,7 +39,9 @@ cmake --build build --config RelWithDebInfo
 On macOS the shaders and pictures go inside the application bundle; elsewhere they are copied
 next to the executable, which is where the game looks for them. Settings and high scores live
 in the folder SDL keeps for the platform, under `Encore/Pinball Fantasies`
-(`~/Library/Application Support/...`, `~/.local/share/...`, `%APPDATA%\...`).
+(`~/Library/Application Support/...`, `~/.local/share/...`, `%APPDATA%\...`), or, with a
+`portable.txt` beside the executable (beside the bundle on macOS), in that folder instead; the
+PORTABLE option moves everything between the two (`src/core/DataMove.h`).
 
 ## Command line
 

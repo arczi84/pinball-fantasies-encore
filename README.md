@@ -47,6 +47,15 @@ They're kept in a `FANTASY` folder here:
 | Linux | `~/.local/share/Encore/Pinball Fantasies/FANTASY` |
 | Windows | `%APPDATA%\Encore\Pinball Fantasies\FANTASY` |
 
+**Portable.** PORTABLE: YES in the options (under MORE OPTIONS) moves all of that, with your
+settings, high scores, recordings and the remastered pictures, into the game's own folder,
+beside the program (beside the app on a Mac), and PORTABLE: NO moves it back. There's only ever
+one copy, so a high score made either way goes with you. A `portable.txt` beside the program is
+what marks it, so the game can live on a USB stick or an SD card and go from machine to machine
+with its scores. It can't be turned on from the Applications or Program Files folder, from a
+read-only place, or without room for the files; on a Mac, move the app somewhere with Finder
+before turning it on, since a freshly downloaded app runs from a hidden copy.
+
 ## What's in it
 
 **It plays like the original.** Since 1.1.0 Encore runs on its own engine, written from
