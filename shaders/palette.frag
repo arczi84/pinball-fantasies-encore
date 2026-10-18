@@ -15,9 +15,8 @@ uniform int uDots;             // 1: this pass is at the screen's resolution, an
 // The table's dot display (uDisplayRows rows from uDisplayTop down): a dot is one pixel of the
 // frame on every other column and every other row, with dark pixels between. Enlarged by a
 // factor that is not a whole number, single pixels and single gaps come out one and two screen
-// pixels by turns, which shimmers; so each dot is drawn here as a round lamp at the screen's own
+// pixels by turns, which shimmers; so each dot is drawn here at the screen's own
 // resolution instead, in the colour of its pixel over the colour between them.
-const float kDotRadius = 0.62;  // in the frame's pixels; the dots are two apart
 
 vec3 colourAt(ivec2 p) {
   ivec2 size = textureSize(uIndices, 0);
@@ -36,8 +35,11 @@ void main() {
     vec2 local = f - vec2(0.0, float(uDisplayTop));
     vec2 cell = floor((local - 0.5) / 2.0 + 0.5);    // the nearest dot
     ivec2 lit = ivec2(cell * 2.0) + ivec2(0, uDisplayTop);
-    float d = length((local - (cell * 2.0 + 0.5)) * screen);
-    float on = clamp(kDotRadius * min(screen.x, screen.y) - d + 0.5, 0.0, 1.0);
+    // The dot is its own pixel, square where the frame's pixels are square (240 rows, tall) and
+    // as flat as they are where they are not (350 rows, the whole table): how far outside it this
+    // point is, in screen pixels, with an edge a screen pixel soft.
+    vec2 away = abs(local - (cell * 2.0 + 0.5)) * screen - 0.5 * screen;
+    float on = clamp(0.5 - max(away.x, away.y), 0.0, 1.0);
     // (the dark: the pixel beside the dot, in its own row, which is always the display's)
     fragColor = vec4(mix(colourAt(lit + ivec2(1, 0)), colourAt(lit), on), 1.0);
     return;

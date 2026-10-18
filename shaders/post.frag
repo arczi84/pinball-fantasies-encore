@@ -18,10 +18,9 @@ uniform int uDots;             // 1: the scene is at the frame's resolution, and
 // The table's dot display (uDisplayRows rows from uDisplayTop down): a dot is one pixel of the
 // scene on every other column and every other row, with dark pixels between. Enlarged by a
 // factor that is not a whole number, single pixels and single gaps come out one and two screen
-// pixels by turns, which shimmers; so each dot is drawn here as a round lamp at the screen's own
+// pixels by turns, which shimmers; so each dot is drawn here at the screen's own
 // resolution instead, in the colour of its pixel over the colour between them. (As palette.frag does
 // when it draws at the screen's resolution.)
-const float kDotRadius = 0.62;  // in the scene's pixels; the dots are two apart
 
 vec3 sceneAt(ivec2 p) { return texelFetch(uScene, clamp(p, ivec2(0), ivec2(uSceneSize) - 1), 0).rgb; }
 
@@ -44,8 +43,11 @@ void main() {
     vec2 cell = floor((local - 0.5) / 2.0 + 0.5);    // the nearest dot
     ivec2 lit = ivec2(cell * 2.0) + ivec2(0, uDisplayTop);
     ivec2 lit0 = ivec2(lit.x, int(uSceneSize.y) - 1 - lit.y);  // (the texture's rows are bottom-up)
-    float d = length((local - (cell * 2.0 + 0.5)) * screen);
-    float on = clamp(kDotRadius * min(screen.x, screen.y) - d + 0.5, 0.0, 1.0);
+    // The dot is its own pixel, square where the frame's pixels are square (240 rows, tall) and
+    // as flat as they are where they are not (350 rows, the whole table): how far outside it this
+    // point is, in screen pixels, with an edge a screen pixel soft.
+    vec2 away = abs(local - (cell * 2.0 + 0.5)) * screen - 0.5 * screen;
+    float on = clamp(0.5 - max(away.x, away.y), 0.0, 1.0);
     // (the dark: the pixel beside the dot, in its own row, which is always the display's)
     fragColor = vec4(mix(sceneAt(lit0 + ivec2(1, 0)), sceneAt(lit0), on), 1.0);
     return;
