@@ -708,8 +708,16 @@ void TableScreen::draw(Engine& e, u8* frame, const View& v, HdFrame* hd) const {
     if (ball_.valid() && !waiting) {
       // (a ball in play is drawn lifted with a shaken table, as the original draws it: cs:4140)
       const float lift = e.B(at::ballHidden) == 0xff ? 0.0f : static_cast<float>(e.W(at::nudgeLift).s());
+      // Where the ball is to a 1024th of a dot, as the engine moves it, rather than the whole dot
+      // the original draws it on: on a screen many times the original's, whole dots move it in
+      // jumps. (The whole dot, should anything have put it somewhere without the finer place.)
+      auto fine = [&](u16 fixed, u16 whole) {
+        const i32 v = static_cast<i32>(u32{e.W(fixed)} | (u32{e.W(fixed, 2)} << 16));
+        const u16 w = e.W(whole);
+        return static_cast<u16>(v / 0x400) == w ? static_cast<float>(v) / 1024.0f : static_cast<float>(static_cast<i16>(w));
+      };
       // (short of where it is while a served ball rolls out: followServe)
-      const float bx = static_cast<float>(e.W(at::ballX).s()) + slideX_, by = static_cast<float>(e.W(at::ballY).s()) + lift;
+      const float bx = fine(at::ballXFixed, at::ballX) + slideX_, by = fine(at::ballYFixed, at::ballY) + lift;
       // What the artwork covers of the ball is said wherever the ball is drawn, the trail
       // included, and a little wider than the ball itself: a dot's cover is read smoothly,
       // from the four around it, and without that the outermost ring of the ball would read

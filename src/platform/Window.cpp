@@ -43,7 +43,16 @@ bool Window::create(const std::string& title, int width, int height) {
     return false;
   }
   SDL_GL_MakeCurrent(window_, context_);
-  SDL_GL_SetSwapInterval(1);
+  // Each frame shown at the screen's refresh (vsync), or, where the driver will not, at the
+  // refresh unless it is late (adaptive); a driver's own setting can still override either.
+  // What it came to is said, with the screen's refresh rate, for when the scrolling stutters.
+  if (!SDL_GL_SetSwapInterval(1) && !SDL_GL_SetSwapInterval(-1))
+    log::error(std::string("the screen's refresh could not be waited for (vsync): ") + SDL_GetError());
+  int interval = 0;
+  SDL_GL_GetSwapInterval(&interval);
+  const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(window_));
+  log::info("vsync " + std::string(interval == 1 ? "on" : interval == -1 ? "adaptive" : "off") +
+            (mode ? ", the screen at " + std::to_string(static_cast<int>(mode->refresh_rate + 0.5f)) + " Hz" : std::string()));
   return true;
 }
 
