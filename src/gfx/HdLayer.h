@@ -60,6 +60,9 @@ struct HdSprite {
   float clipTop = 0, clipBottom = 0;         ///< the screen rows it may be drawn in
   u16 hiddenBy = 0;                          ///< HdPixel flags that keep it from being drawn
   float opacity = 1;                         ///< 1 = solid; less for the ball's trail
+  /// The picture's colours turned: its hue by `hue` radians, its saturation and brightness by
+  /// these factors, each as much as the colour is strong, so that whites and creams stay.
+  float hue = 0, saturation = 1, brightness = 1;
 };
 
 struct HdFrame {
@@ -86,6 +89,7 @@ struct HdFrame {
   std::vector<HdSprite> sprites;                  ///< drawn over the pictures, in order
   float spriteTint = 1.0f;                        ///< the screen's fade, applied to the sprites
   u8 ownSprites = 0;                              ///< bit per flipper with a picture of its own, not cut from the artwork
+  bool sharedFlipper = false;                     ///< every flipper is the one picture of a bat (sprite picture 0)
   bool ballTrail = true;                          ///< draw the fading ghosts behind the ball
   u8 ballLayer = 0;                               ///< the ball is on the playfield (0) or the ramps (1)
 

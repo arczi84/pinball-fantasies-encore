@@ -340,9 +340,22 @@ void App::loadFlipperPictures(int table) {
   const auto cutOut = table_->flipperPictures();
   const auto sides = table_->flipperIsLeft();
   ownFlipperPictures_ = 0;
+  sharedFlipper_ = false;
+  // One picture of a bat for every flipper of every table (TableScreen::sharedFlipper), when there
+  // is one; otherwise each flipper's own, or the one cut out of the original artwork.
+  if (const auto path = hdPicturePath("flipper.png"); present(path)) {
+    if (const auto picture = loadImageFile(path)) {
+      renderer_.setSpritePicture(0, picture->width, picture->height, picture->pixels.data());
+      ownFlipperPictures_ = static_cast<u8>((1u << cutOut.size()) - 1);
+      sharedFlipper_ = true;
+      log::info("flipper picture: one for all, " + std::to_string(picture->width) + "x" + std::to_string(picture->height));
+    } else {
+      log::error("cannot read " + path.string());
+    }
+  }
   std::array<int, 2> seen{};
   int own = 0;
-  for (std::size_t f = 0; f < cutOut.size(); ++f) {
+  for (std::size_t f = 0; f < cutOut.size() && !sharedFlipper_; ++f) {
     const bool left = sides[f];
     const int nth = ++seen[left ? 0 : 1];
     const std::string name = "flipper" + std::to_string(table + 1) + (left ? "_left" : "_right") +
@@ -997,6 +1010,7 @@ void App::render() {
   // frame for the renderer to put back, so with them off it must draw everything itself.
   HdFrame* const hd = renderer_.hasHdPictures() && renderer_.hdEnabled() ? &hd_ : nullptr;
   hd_.ownSprites = ownFlipperPictures_;
+  hd_.sharedFlipper = sharedFlipper_;
   hd_.ballTrail = ballTrail_;
   // The frame drawn into is as big as the screen is now, not as it was after the last frame
   // of the game: a resolution changed in the pause menu takes effect at once, and with the

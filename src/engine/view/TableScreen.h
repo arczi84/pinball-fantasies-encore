@@ -101,9 +101,11 @@ class TableScreen {
   void buildFlipperArt(Engine& engine);
   void buildLampAreas(Engine& engine);
   float flipperAngle(Engine& engine, const FlipperArt& art) const;
+  void sharedFlipper(const FlipperArt& art, HdSprite& sprite) const;
   void lampsLit(Engine& engine, int lamps, std::array<bool, 256>& lit) const;
 
   TableData data_;
+  int table_ = 0;  ///< 0 to 3
   BallSprite ball_;
   Bytes picture_;  ///< the playfield as it now is on the screen: its picture, and the flippers as they stand
   std::array<Bytes, 2> hides_;      ///< per dot: the artwork hides the ball there, on the playfield and on the ramps
