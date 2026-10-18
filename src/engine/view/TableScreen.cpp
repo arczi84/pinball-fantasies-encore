@@ -321,8 +321,10 @@ void TableScreen::buildFlipperArt(Engine& e) {
         }
       }
     }
-    art.axisX = static_cast<float>(ox);
-    art.axisY = static_cast<float>(oy);
+    // (measured above by the dots' numbers; the axis is where it falls on the table, a dot's
+    // middle half a dot on from its number)
+    art.axisX = static_cast<float>(ox + 0.5);
+    art.axisY = static_cast<float>(oy + 0.5);
     art.angle.clear();
     for (std::size_t q = 0; q < static_cast<std::size_t>(steps); ++q) {
       const u8* covered = &coveredAt[q * pixels];
@@ -353,7 +355,9 @@ void TableScreen::buildFlipperArt(Engine& e) {
 /// rubber its own colour, the picture's turned (see HdSprite's hue).
 void TableScreen::sharedFlipper(const FlipperArt& art, HdSprite& s) const {
   constexpr float kSharedDotsW = 327.0f / 6.0f, kSharedDotsH = 107.0f / 6.0f;  // (the guide's canvas, 6 px a dot)
-  constexpr float kSharedHingeX = 50.5443f / 327.0f, kSharedHingeY = 52.9388f / 107.0f;
+  // (the hinge's dot middle: the guide's corner of that dot, 50.5443,52.9388, moved half a dot
+  // down and right as the guide's bat lies, Party Land's lower left at rest, 33.4234 degrees)
+  constexpr float kSharedHingeX = 54.7006f / 327.0f, kSharedHingeY = 53.7902f / 107.0f;
   constexpr float kPi = 3.14159265f;
   // (the far end's direction at rest: to the right for a left flipper, to the left for a right one)
   const bool left = std::cos(art.angle[0]) > 0;
@@ -742,10 +746,14 @@ void TableScreen::draw(Engine& e, u8* frame, const View& v, HdFrame* hd) const {
       // Where the ball is to a 1024th of a dot, as the engine moves it, rather than the whole dot
       // the original draws it on: on a screen many times the original's, whole dots move it in
       // jumps. (The whole dot, should anything have put it somewhere without the finer place.)
+      // What the ball meets is looked for from the whole dot, the finer place cut down to it, so
+      // the finer place is from none to a whole dot on from where the ball touches; half a dot
+      // back, it is never more than half a dot from there.
+      constexpr float kTouches = 0.5f;
       auto fine = [&](u16 fixed, u16 whole) {
         const i32 v = static_cast<i32>(u32{e.W(fixed)} | (u32{e.W(fixed, 2)} << 16));
         const u16 w = e.W(whole);
-        return static_cast<u16>(v / 0x400) == w ? static_cast<float>(v) / 1024.0f : static_cast<float>(static_cast<i16>(w));
+        return static_cast<u16>(v / 0x400) == w ? static_cast<float>(v) / 1024.0f - kTouches : static_cast<float>(static_cast<i16>(w));
       };
       // (short of where it is while a served ball rolls out: followServe)
       const float bx = fine(at::ballXFixed, at::ballX) + slideX_, by = fine(at::ballYFixed, at::ballY) + lift;
@@ -790,7 +798,7 @@ void TableScreen::draw(Engine& e, u8* frame, const View& v, HdFrame* hd) const {
       const std::size_t kept = e.stepsKept(), length = kept > 0 ? kept - 1 : 0;
       for (std::size_t i = 0; v.ballTrail && i < length; ++i) {
         const Engine::Step& was = steps[Engine::kSteps - kept + i];
-        const float x = static_cast<float>(was.x) / 1024.0f, y = static_cast<float>(was.y) / 1024.0f + lift;
+        const float x = static_cast<float>(was.x) / 1024.0f - kTouches, y = static_cast<float>(was.y) / 1024.0f - kTouches + lift;
         // Strongest just behind the ball, fading away towards the oldest step.
         const float recent = static_cast<float>(i + 1) / static_cast<float>(length);
         const float away = std::hypot(x - bx, y - by);
