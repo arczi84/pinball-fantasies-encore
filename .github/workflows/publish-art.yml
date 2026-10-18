@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       format:
-        description: "Art format (kArtFormat in src/game/Art.h); raise it only for pictures that need a newer game"
+        description: "Art format; leave empty for the game's own (kArtFormat in src/game/Art.h)"
         required: false
-        default: "1"
+        default: ""
 
 permissions:
   contents: read
@@ -48,5 +48,6 @@ jobs:
         env:
           ENCORE_API: ${{ vars.ENCORE_API }}
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
-          ART_FORMAT: ${{ github.event.inputs.format || '1' }}
+          # (empty, as on a push: the script takes kArtFormat from src/game/Art.h)
+          ART_FORMAT: ${{ github.event.inputs.format }}
         run: server/publish-art.sh "$RUNNER_TEMP/hd"
