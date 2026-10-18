@@ -17,7 +17,9 @@ namespace encore {
 
 /// What this game understands of a set. A set of a higher format needs code this game does
 /// not have, and is left alone; raise it with the pictures that need it (server/README.md).
-constexpr int kArtFormat = 1;
+/// The server is told it, and gives the newest set of this format or older. 2: one picture of
+/// a bat for every flipper (flipper.png), where 1 had a picture of each flipper.
+constexpr int kArtFormat = 2;
 
 struct ArtFile {
   std::string sha256;

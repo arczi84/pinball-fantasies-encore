@@ -119,8 +119,11 @@ ENCORE_API=https://thebestpinball.com PUBLISH_TOKEN=<the secret> \
 
 Only the pictures the server does not have are uploaded. When the pictures need code that
 games out there do not have (a new kind of picture, say), raise `kArtFormat` in
-`src/game/Art.h` and publish with `ART_FORMAT=` the same number: games that do not understand
-it keep the set they have. Going back to older
+`src/game/Art.h`: the script publishes at that format unless `ART_FORMAT=` says otherwise. A
+game asks for the format it understands (`/v1/art?format=2`; the games before 1.2 do not say,
+which is 1) and is given the newest set of that format or older, so older games keep getting
+the last set they can use, a new installation of one included. Format 2 is one picture of a bat
+for every flipper (`flipper.png`) where format 1 had one for each flipper. Going back to older
 pictures is running it from an older checkout: they are all still there, so it only writes the
 set.
 

@@ -6,8 +6,8 @@
 #
 #   ENCORE_API      the Worker, e.g. https://thebestpinball.com
 #   PUBLISH_TOKEN   the Worker's secret of the same name
-#   ART_FORMAT      optional, 1 if not given: what a game must understand to use these
-#                   pictures (kArtFormat in src/game/Art.h); older games keep the set they have
+#   ART_FORMAT      optional, kArtFormat in src/game/Art.h if not given: what a game must
+#                   understand to use these pictures; older games keep the last set they can use
 #   publish-art.sh [folder]
 set -euo pipefail
 
@@ -33,8 +33,10 @@ for f in "${pictures[@]}"; do
 done
 echo "$uploaded of ${#pictures[@]} pictures uploaded, the rest were there already"
 
-jq -c --argjson f "${ART_FORMAT:-1}" '{format: $f, files: .}' <<< "$files" |
+format="${ART_FORMAT:-$(sed -n 's/^constexpr int kArtFormat = \([0-9]*\);.*/\1/p' "$(dirname "$0")/../src/game/Art.h")}"
+[ -n "$format" ] || { echo "no ART_FORMAT, and none found in src/game/Art.h" >&2; exit 1; }
+jq -c --argjson f "$format" '{format: $f, files: .}' <<< "$files" |
   curl -fsS -X PUT -H "Authorization: Bearer $PUBLISH_TOKEN" -H "Content-Type: application/json" \
     --data-binary @- "$ENCORE_API/v1/publish/art" |
   jq -r 'if .unchanged then "nothing changed: still version \(.version)"
-          else "published version \(.version): \(.files) pictures, \(.bytes / 1048576 | floor) MB" end'
+          else "published version \(.version) (format \(.format)): \(.files) pictures, \(.bytes / 1048576 | floor) MB" end'
