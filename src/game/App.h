@@ -117,6 +117,7 @@ class App {
   HdFrame hd_;
   std::array<int, 2> panelStrip_{};  ///< the size of the picture repeated down the tall menu's panel, if there is one
   u8 ownFlipperPictures_ = 0;  ///< bit per flipper with a picture of its own
+  bool sharedFlipper_ = false;  ///< every flipper drawn from flipper.png (TableScreen::sharedFlipper)
   bool ballTrail_ = true;      ///< the fading ghosts behind the ball
   bool dotMatrixTop_ = false;  ///< the dot display above the table (the Amiga's place) rather than below
   bool balancedSound_ = true;  ///< this version's mixing rather than the driver's (MusicDriver::setBalanced)

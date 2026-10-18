@@ -19,6 +19,28 @@ uniform sampler2D uCover;    // what hides the ball, drawn to the replacement pl
 uniform uint uHasCover;      // there is such a picture for where the ball is (on the playfield or the ramps)
 uniform vec2 uCoverSource;   // the original playfield's size, which the picture covers edge to edge
 uniform uint uFirstPlayfield, uLastPlayfield;  // the playfield pictures' numbers
+uniform vec3 uRecolour;      // the hue turned by x radians, the saturation and brightness by y and z (HdSprite)
+
+vec3 toHsv(vec3 c) {
+  float hi = max(c.r, max(c.g, c.b)), lo = min(c.r, min(c.g, c.b)), d = hi - lo;
+  float h = d <= 0.0 ? 0.0 : hi == c.r ? mod((c.g - c.b) / d, 6.0) : hi == c.g ? (c.b - c.r) / d + 2.0 : (c.r - c.g) / d + 4.0;
+  return vec3(h / 6.0, hi > 0.0 ? d / hi : 0.0, hi);
+}
+vec3 toRgb(vec3 c) {
+  vec3 k = clamp(abs(mod(c.x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+  return c.z * mix(vec3(1.0), k, c.y);
+}
+// The colour turned as uRecolour says, as much as it is a colour: a strong one wholly, the
+// cream and the whites of a picture hardly.
+vec3 recolour(vec3 c) {
+  if (uRecolour == vec3(0.0, 1.0, 1.0)) return c;
+  vec3 h = toHsv(c);
+  float strong = smoothstep(0.25, 0.6, h.y);
+  h.x = fract(h.x + uRecolour.x / 6.2831853 * strong);
+  h.y = clamp(h.y * mix(1.0, uRecolour.y, strong), 0.0, 1.0);
+  h.z = clamp(h.z * mix(1.0, uRecolour.z, strong), 0.0, 1.0);
+  return toRgb(h);
+}
 
 // Under clear plastic the ball is seen whole, but greyed: this much of its light and shade
 // gives way to an even grey.
@@ -69,5 +91,5 @@ void main() {
   vec4 t = texture(uSprite, sp);
   float alpha = t.a * (1.0 - cover) * uOpacity;
   if (alpha < 0.02) discard;
-  fragColor = vec4(mix(t.rgb, kHazeGrey, kHaze * plastic) * uTint, alpha);
+  fragColor = vec4(mix(recolour(t.rgb), kHazeGrey, kHaze * plastic) * uTint, alpha);
 }

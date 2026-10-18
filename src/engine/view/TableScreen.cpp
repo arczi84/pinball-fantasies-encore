@@ -6,11 +6,12 @@
 
 namespace encore {
 
-TableScreen::TableScreen(const std::filesystem::path& prg, int table) : data_(TableData::load(prg, table)) {
+TableScreen::TableScreen(const std::filesystem::path& prg, int table) : data_(TableData::load(prg, table)), table_(table) {
   ball_ = BallSprite::decode(data_.code);
 }
 
-TableScreen::TableScreen(Bytes prg, int table) : data_(TableData::parse(std::move(prg), "TABLE" + std::to_string(table + 1) + ".PRG", table)) {
+TableScreen::TableScreen(Bytes prg, int table)
+    : data_(TableData::parse(std::move(prg), "TABLE" + std::to_string(table + 1) + ".PRG", table)), table_(table) {
   ball_ = BallSprite::decode(data_.code);
 }
 
@@ -345,6 +346,35 @@ void TableScreen::buildFlipperArt(Engine& e) {
 
 /// Where a flipper is now, in radians from its resting position. The table moves a flipper
 /// smoothly and only picks a picture by steps of 55, so the angle follows the steps either side.
+/// One picture of a bat for every flipper (flipper.png): lying flat, its far end to the right,
+/// its hinge at kSharedHinge of the picture, which spans kSharedDots of the table's dots (the
+/// original bat is the same on every flipper). A left flipper is the picture turned to its
+/// resting angle; a right one, the picture mirrored, so it points the other way; and each table's
+/// rubber its own colour, the picture's turned (see HdSprite's hue).
+void TableScreen::sharedFlipper(const FlipperArt& art, HdSprite& s) const {
+  constexpr float kSharedDotsW = 327.0f / 6.0f, kSharedDotsH = 107.0f / 6.0f;  // (the guide's canvas, 6 px a dot)
+  constexpr float kSharedHingeX = 50.5443f / 327.0f, kSharedHingeY = 52.9388f / 107.0f;
+  constexpr float kPi = 3.14159265f;
+  // (the far end's direction at rest: to the right for a left flipper, to the left for a right one)
+  const bool left = std::cos(art.angle[0]) > 0;
+  s.picture = 0;
+  s.pivotSpriteX = kSharedHingeX;
+  s.pivotSpriteY = kSharedHingeY;
+  s.scaleX = (left ? 1.0f : -1.0f) / kSharedDotsW;
+  s.scaleY = 1.0f / kSharedDotsH;
+  // The picture is turned from lying flat to the bat's resting angle, and on to where it swings;
+  // mirrored, its own angle is measured the other way round.
+  s.angle += left ? art.angle[0] : art.angle[0] - kPi;
+  // Party Land's and the Gameshow's rubber is the picture's red; Speed Devils' blue and Stones
+  // 'n Bones' purple, as their own pictures had them.
+  struct Colour { float hue, saturation, brightness; };
+  static constexpr Colour kRubber[4] = {{0, 1, 1}, {-152.7f, 0.767f, 0.892f}, {0, 1, 1}, {-85.5f, 0.955f, 0.860f}};
+  const Colour& c = kRubber[static_cast<std::size_t>(std::clamp(table_, 0, 3))];
+  s.hue = c.hue * kPi / 180.0f;
+  s.saturation = c.saturation;
+  s.brightness = c.brightness;
+}
+
 float TableScreen::flipperAngle(Engine& e, const FlipperArt& art) const {
   const int pos = std::max<int>(static_cast<i16>(e.nativeW(static_cast<u16>(art.record + 0x1c))), 0);
   const std::size_t q = std::min<std::size_t>(static_cast<std::size_t>(pos / 55), art.angle.size() - 1);
@@ -698,6 +728,7 @@ void TableScreen::draw(Engine& e, u8* frame, const View& v, HdFrame* hd) const {
       s.scaleX = 1.0f / rectW;
       s.scaleY = 1.0f / rectH;
       s.angle = flipperAngle(e, art);
+      if (hd->sharedFlipper) sharedFlipper(art, s);
       s.clipTop = 0;
       s.clipBottom = static_cast<float>(view);
       hd->sprites.push_back(s);
