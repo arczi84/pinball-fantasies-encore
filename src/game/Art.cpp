@@ -101,7 +101,7 @@ std::optional<ArtSet> parseArtSet(std::string_view body) {
 }
 
 std::optional<ArtSet> fetchArtSet(std::string* error) {
-  const auto body = httpDownload(onlineApi() + "/v1/art", error);
+  const auto body = httpDownload(onlineApi() + "/v1/art?format=" + std::to_string(kArtFormat), error);
   if (!body) return std::nullopt;
   auto set = parseArtSet(text(*body));
   if (!set && error) *error = "the server's answer is not a set of pictures";

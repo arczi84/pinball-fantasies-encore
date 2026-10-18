@@ -14,7 +14,7 @@
 //   GET  /v1/runs/<id>/replay                      a verified game's recording
 //   GET  /v1/fantasy                               where the game fetches its first-start archive
 //   GET  /v1/release                               the newest release, for the game to offer (below)
-//   GET  /v1/art                                   the current set of HD pictures, as text (below)
+//   GET  /v1/art?format=2                          the newest set of HD pictures the game can use, as text (below)
 //   GET  /v1/art/<sha256>.png                      one of its pictures, by its contents
 //   HEAD /v1/art/<sha256>.png                      whether a picture is here already
 //   PUT  /v1/publish/art/<sha256>  <picture>       keep a picture              (publisher token)
@@ -40,7 +40,9 @@
 // the current one, and the game asks for that. Going back is publishing the older pictures
 // again, which only writes a manifest. The publisher's token is a Worker secret, PUBLISH_TOKEN.
 // A set has a format, which a game must understand to use it: it goes up only when pictures
-// need code a game does not have (a new kind of picture, say), and older games keep theirs.
+// need code a game does not have (a new kind of picture, say). A game says which it understands
+// (?format=; the games before 1.2 say nothing, which is 1) and is given the newest set of that
+// format or older, so an older game keeps getting the last set it can use.
 // The game reads the set as text, a line for each picture after two of its own:
 //
 //   version 7
@@ -575,11 +577,27 @@ interface ArtSet {
 
 const pictureKey = (hash: string) => `pictures/${hash}`;
 
-/** The current set, with where each picture is fetched from; nothing yet is a 404. */
-async function currentArt(env: Env, url: URL): Promise<Response> {
+/** The newest set of a format the game understands, or none. The newest of all is current.json;
+ *  the newest of each format is current-<format>.json as well, so a game that only understands
+ *  an older format keeps being given the last set it can use. */
+async function artFor(env: Env, understands: number): Promise<ArtSet | null> {
   const current = await env.ART.get("current.json");
-  if (!current) return fail(404, "no pictures published yet");
-  const set = await current.json<ArtSet>();
+  if (!current) return null;
+  const newest = await current.json<ArtSet>();
+  if (newest.format <= understands) return newest;
+  for (let f = Math.min(understands, newest.format - 1); f >= 1; --f) {
+    const kept = await env.ART.get(`current-${f}.json`);
+    if (kept) return await kept.json<ArtSet>();
+  }
+  return null;
+}
+
+/** The newest set the asking game can use (?format=, what it understands: 1 when not said, as
+ *  the games before 1.2 do not say), with where each picture is fetched from; none is a 404. */
+async function currentArt(env: Env, url: URL): Promise<Response> {
+  const asked = Number(url.searchParams.get("format") ?? "1");
+  const set = await artFor(env, Number.isInteger(asked) && asked >= 1 ? asked : 1);
+  if (!set) return fail(404, "no pictures published yet for this game");
   const lines = [`version ${set.version}`, `format ${set.format}`];
   for (const f of set.files) lines.push(`${f.sha256} ${f.size} ${f.name} ${url.origin}/v1/art/${f.sha256}.png`);
   return new Response(lines.join("\n") + "\n", {
@@ -646,9 +664,15 @@ async function publishArt(env: Env, req: Request): Promise<Response> {
   const version = previous ? previous.version + 1 : 1;
   const set: ArtSet = { version, format, publishedAt: now(), files };
   const text = JSON.stringify(set);
-  await env.ART.put(`sets/${version}.json`, text, { httpMetadata: { contentType: "application/json" } });
-  await env.ART.put("current.json", text, { httpMetadata: { contentType: "application/json" } });
-  return json({ version, files: files.length, bytes });
+  const asJson = { httpMetadata: { contentType: "application/json" } };
+  // The set it takes over from stays the newest of its own format, for the games that only
+  // understand that one (artFor): kept as such the first time a set of another format follows it.
+  if (previous && previous.format !== format && !(await env.ART.head(`current-${previous.format}.json`)))
+    await env.ART.put(`current-${previous.format}.json`, JSON.stringify(previous), asJson);
+  await env.ART.put(`sets/${version}.json`, text, asJson);
+  await env.ART.put(`current-${format}.json`, text, asJson);
+  await env.ART.put("current.json", text, asJson);
+  return json({ version, format, files: files.length, bytes });
 }
 
 // ---- routing -------------------------------------------------------------------------------
