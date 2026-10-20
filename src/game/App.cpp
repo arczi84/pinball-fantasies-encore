@@ -409,20 +409,14 @@ void App::loadFlipperPictures(int table) {
   }
 
   // The ball: its own picture if there is one, and otherwise the original's, saying why.
-  std::optional<RgbaImage> ball;
-  std::string failed;
-  for (const std::string& name : {"ball" + std::to_string(table + 1) + ".png", std::string("ball.png")}) {
-    ball = readPicture(hdPicturePath(name), why);
-    if (ball) break;
-    if (!why.empty()) failed += (failed.empty() ? "" : "; ") + why;
-  }
+  const auto ball = readPicture(hdPicturePath("ball.png"), why);
   if (ball) {
     renderer_.setSpritePicture(HdSprite::kBall, ball->width, ball->height, ball->pixels.data());
     log::info("ball picture: " + std::to_string(ball->width) + "x" + std::to_string(ball->height));
   } else {
     const auto original = table_->ballPicture();
     renderer_.setSpritePicture(HdSprite::kBall, original.width, original.height, original.rgba.data());
-    if (!failed.empty()) log::error("ball picture: the original's, as " + failed);
+    if (!why.empty()) log::error("ball picture: the original's, as " + why);
     else log::info(std::string("ball picture: the original's, as ") + (artDir_.empty() && !options_.hdDir ? "there are no HD pictures" : "there is none in the HD pictures"));
   }
 }
