@@ -125,6 +125,28 @@ bool present(const std::filesystem::path& path) {
   return std::filesystem::exists(path, ec);
 }
 
+/// A picture, if it is there and can be read; otherwise nothing, and why not (nothing said when
+/// it is simply not there). A drive can fail to answer for a moment (a card, a machine just
+/// woken), so what cannot be looked at or read is tried once more before it is given up.
+std::optional<RgbaImage> readPicture(const std::filesystem::path& path, std::string& why) {
+  why.clear();
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    std::error_code ec;
+    const bool there = std::filesystem::exists(path, ec);
+    if (ec) {
+      why = path.string() + " cannot be looked at (" + ec.message() + ")";
+      continue;
+    }
+    if (!there) {
+      why.clear();
+      return std::nullopt;
+    }
+    if (auto picture = loadImageFile(path)) return picture;
+    why = path.string() + " cannot be read";
+  }
+  return std::nullopt;
+}
+
 /// The keys the game understands, from SDL key codes (the original layout: Shift, Ctrl or
 /// Alt for the flippers, Space to nudge, Down to pull the plunger, F1-F4 for the tables).
 Key keyFor(SDL_Keycode k) {
@@ -343,15 +365,14 @@ void App::loadFlipperPictures(int table) {
   sharedFlipper_ = false;
   // One picture of a bat for every flipper of every table (TableScreen::sharedFlipper), when there
   // is one; otherwise each flipper's own, or the one cut out of the original artwork.
-  if (const auto path = hdPicturePath("flipper.png"); present(path)) {
-    if (const auto picture = loadImageFile(path)) {
-      renderer_.setSpritePicture(0, picture->width, picture->height, picture->pixels.data());
-      ownFlipperPictures_ = static_cast<u8>((1u << cutOut.size()) - 1);
-      sharedFlipper_ = true;
-      log::info("flipper picture: one for all, " + std::to_string(picture->width) + "x" + std::to_string(picture->height));
-    } else {
-      log::error("cannot read " + path.string());
-    }
+  std::string why;
+  if (const auto picture = readPicture(hdPicturePath("flipper.png"), why)) {
+    renderer_.setSpritePicture(0, picture->width, picture->height, picture->pixels.data());
+    ownFlipperPictures_ = static_cast<u8>((1u << cutOut.size()) - 1);
+    sharedFlipper_ = true;
+    log::info("flipper picture: one for all, " + std::to_string(picture->width) + "x" + std::to_string(picture->height));
+  } else if (!why.empty()) {
+    log::error("flipper picture: " + why);
   }
   std::array<int, 2> seen{};
   int own = 0;
@@ -360,12 +381,8 @@ void App::loadFlipperPictures(int table) {
     const int nth = ++seen[left ? 0 : 1];
     const std::string name = "flipper" + std::to_string(table + 1) + (left ? "_left" : "_right") +
                              (nth > 1 ? std::to_string(nth) : "") + ".png";
-    const auto path = hdPicturePath(name);
-    std::optional<RgbaImage> picture;
-    if (present(path)) {
-      picture = loadImageFile(path);
-      if (!picture) log::error("cannot read " + path.string());
-    }
+    const auto picture = readPicture(hdPicturePath(name), why);
+    if (!why.empty()) log::error("flipper picture: " + why + "; the original's instead");
     if (picture) {
       renderer_.setSpritePicture(f, picture->width, picture->height, picture->pixels.data());
       ownFlipperPictures_ = static_cast<u8>(ownFlipperPictures_ | (1u << f));
@@ -382,24 +399,22 @@ void App::loadFlipperPictures(int table) {
   renderer_.clearCoverPictures();
   for (int layer = 0; layer < 2; ++layer) {
     const auto path = hdPicturePath("hides_ball" + std::to_string(table + 1) + (layer ? "_ramps" : "_playfield") + ".png");
-    if (!present(path)) continue;
-    const auto cover = loadImageFile(path);
+    const auto cover = readPicture(path, why);
     if (!cover) {
-      log::error("cannot read " + path.string());
+      if (!why.empty()) log::error("what hides the ball: " + why);
       continue;
     }
     renderer_.setCoverPicture(layer, cover->width, cover->height, cover->pixels.data(), TableData::kWidth, TableData::kHeight);
     log::info("what hides the ball: " + path.filename().string());
   }
 
-  // The ball: its own picture if there is one, and otherwise the original's.
+  // The ball: its own picture if there is one, and otherwise the original's, saying why.
   std::optional<RgbaImage> ball;
+  std::string failed;
   for (const std::string& name : {"ball" + std::to_string(table + 1) + ".png", std::string("ball.png")}) {
-    const auto path = hdPicturePath(name);
-    if (!present(path)) continue;
-    ball = loadImageFile(path);
-    if (!ball) log::error("cannot read " + path.string());
-    break;
+    ball = readPicture(hdPicturePath(name), why);
+    if (ball) break;
+    if (!why.empty()) failed += (failed.empty() ? "" : "; ") + why;
   }
   if (ball) {
     renderer_.setSpritePicture(HdSprite::kBall, ball->width, ball->height, ball->pixels.data());
@@ -407,6 +422,8 @@ void App::loadFlipperPictures(int table) {
   } else {
     const auto original = table_->ballPicture();
     renderer_.setSpritePicture(HdSprite::kBall, original.width, original.height, original.rgba.data());
+    if (!failed.empty()) log::error("ball picture: the original's, as " + failed);
+    else log::info(std::string("ball picture: the original's, as ") + (artDir_.empty() && !options_.hdDir ? "there are no HD pictures" : "there is none in the HD pictures"));
   }
 }
 
