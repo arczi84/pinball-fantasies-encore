@@ -3,9 +3,89 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pinball Fantasies: Encore!</title>
-<meta name="description" content="A native remake of Pinball Fantasies for macOS, Windows and Linux, with remastered artwork and online high scores.">
+<title>Pinball Fantasies – free remake for Windows, Mac &amp; Linux | The Best Pinball</title>
+<meta name="description" content="Play Pinball Fantasies again: a free remake of the classic pinball game for Windows, macOS and Linux. All four tables (Party Land, Speed Devils, Billion Dollar Gameshow, Stones 'n' Bones), the original physics and rules, remastered HD artwork and online high scores.">
+<link rel="canonical" href="https://thebestpinball.com/">
+<meta name="theme-color" content="#000000">
 <link rel="icon" href="favicon.png">
+<link rel="sitemap" type="application/xml" href="/sitemap.xml">
+
+<!-- How a shared link shows: a card with the title, the text and a picture of the game. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="The Best Pinball">
+<meta property="og:url" content="https://thebestpinball.com/">
+<meta property="og:title" content="Pinball Fantasies – free remake for Windows, Mac & Linux">
+<meta property="og:description" content="The classic pinball game, all four tables, with the original physics, remastered HD artwork and online high scores. Free and open source.">
+<meta property="og:image" content="https://thebestpinball.com/media/gameplay.jpg">
+<meta property="og:image:width" content="960">
+<meta property="og:image:height" content="720">
+<meta property="og:image:alt" content="Pinball Fantasies being played, with the remastered artwork">
+<meta property="og:video" content="https://thebestpinball.com/media/gameplay.mp4">
+<meta property="og:video:type" content="video/mp4">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Pinball Fantasies – free remake for Windows, Mac & Linux">
+<meta name="twitter:description" content="The classic pinball game, all four tables, with the original physics, remastered HD artwork and online high scores.">
+<meta name="twitter:image" content="https://thebestpinball.com/media/gameplay.jpg">
+
+<!-- What the page is about, for search engines and AI assistants: the game, free, based on
+     Pinball Fantasies, and the site's own name. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://thebestpinball.com/#website",
+      "url": "https://thebestpinball.com/",
+      "name": "The Best Pinball",
+      "alternateName": ["thebestpinball.com", "Pinball Fantasies: Encore!"],
+      "inLanguage": "en"
+    },
+    {
+      "@type": ["VideoGame", "SoftwareApplication"],
+      "@id": "https://thebestpinball.com/#game",
+      "name": "Pinball Fantasies: Encore!",
+      "alternateName": ["Pinball Fantasies", "Pinball Fantasies remake", "Pinball Fantasies HD", "The Best Pinball"],
+      "description": "A free, native remake of Pinball Fantasies, the classic pinball game, for Windows, macOS and Linux. All four tables play with the original rules and physics, on an engine written from the original game's code, under the 1994 pictures or remastered high-resolution artwork, with online high scores checked by replaying each game.",
+      "url": "https://thebestpinball.com/",
+      "image": "https://thebestpinball.com/media/gameplay.jpg",
+      "screenshot": ["https://thebestpinball.com/img/compare-hd.webp", "https://thebestpinball.com/img/compare-1994.webp"],
+      "genre": ["Pinball", "Arcade", "Retro"],
+      "gamePlatform": ["Windows", "macOS", "Linux", "Steam Deck"],
+      "operatingSystem": "Windows, macOS, Linux",
+      "applicationCategory": "GameApplication",
+      "playMode": ["SinglePlayer", "MultiPlayer"],
+      "numberOfPlayers": {"@type": "QuantitativeValue", "minValue": 1, "maxValue": 8},
+      "gameItem": [
+        {"@type": "Thing", "name": "Party Land"},
+        {"@type": "Thing", "name": "Speed Devils"},
+        {"@type": "Thing", "name": "Billion Dollar Gameshow"},
+        {"@type": "Thing", "name": "Stones 'n' Bones"}
+      ],
+      "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock"},
+      "isAccessibleForFree": true,
+      "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+      "downloadUrl": "https://github.com/pedrocatalao/pinball-fantasies-encore/releases/latest",
+      "codeRepository": "https://github.com/pedrocatalao/pinball-fantasies-encore",
+      "author": {"@type": "Person", "name": "Pedro Catalão"},
+      "isBasedOn": {
+        "@type": "VideoGame",
+        "name": "Pinball Fantasies",
+        "author": {"@type": "Organization", "name": "Digital Illusions"},
+        "publisher": {"@type": "Organization", "name": "21st Century Entertainment"}
+      },
+      "trailer": {
+        "@type": "VideoObject",
+        "name": "Pinball Fantasies gameplay",
+        "description": "A few seconds of each of the four tables, filmed by the game from recorded games.",
+        "thumbnailUrl": "https://thebestpinball.com/media/gameplay.jpg",
+        "contentUrl": "https://thebestpinball.com/media/gameplay.mp4",
+        "uploadDate": "2026-10-04"
+      }
+    }
+  ]
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Doto:wght@500..900&display=swap">
@@ -23,7 +103,7 @@
 
 <header class="masthead">
   <div class="hero">
-    <img src="img/banner.webp" alt="Pinball Fantasies: Encore!" width="1800" height="647">
+    <h1 class="hero-title"><img src="img/banner.webp" alt="Pinball Fantasies: Encore!, the classic pinball game remade" width="1800" height="647"></h1>
     <div class="dmd marquee-strip">
       <div class="marquee" aria-hidden="true">
         <span class="dmd-text">PARTY LAND &nbsp;&#8226;&nbsp; SPEED DEVILS &nbsp;&#8226;&nbsp; BILLION DOLLAR GAMESHOW &nbsp;&#8226;&nbsp; STONES 'N' BONES &nbsp;&#8226;&nbsp;&nbsp;</span><span class="dmd-text">PARTY LAND &nbsp;&#8226;&nbsp; SPEED DEVILS &nbsp;&#8226;&nbsp; BILLION DOLLAR GAMESHOW &nbsp;&#8226;&nbsp; STONES 'N' BONES &nbsp;&#8226;&nbsp;&nbsp;</span>
@@ -85,8 +165,8 @@
     <!-- The same moment on Stones 'n' Bones, the 1994 picture on the left of the line and the
          remastered one on the right; dragging anywhere on it moves the line. -->
     <div class="compare" id="compare" style="--pos: 50%">
-      <img src="img/compare-hd.webp" alt="Stones 'n' Bones, remastered" width="1668" height="1134">
-      <img class="compare-1994" src="img/compare-1994.webp" alt="Stones 'n' Bones, as in 1994" width="1668" height="1134">
+      <img src="img/compare-hd.webp" alt="The Stones 'n' Bones pinball table in Pinball Fantasies, with the remastered HD artwork" width="1668" height="1134">
+      <img class="compare-1994" src="img/compare-1994.webp" alt="The Stones 'n' Bones pinball table in Pinball Fantasies, as it looked in 1994" width="1668" height="1134">
       <span class="compare-label left dmd-text">1994</span>
       <span class="compare-label right dmd-text">REMASTERED</span>
       <span class="compare-line" aria-hidden="true"></span>
