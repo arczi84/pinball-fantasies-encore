@@ -191,6 +191,8 @@ main, .masthead, .footer { max-width: 920px; margin: 0 auto; padding: 0 16px; }
 /* As wide as everything below it, the tables' banners included. */
 .hero { width: 100%; }
 .hero img { display: block; width: 100%; height: auto; }
+/* (the banner is the page's heading, for search engines; it looks as the picture alone) */
+.hero-title { margin: 0; font-size: inherit; line-height: 0; }
 .marquee-strip {
   margin-top: -1px;
   padding: 8px 0 6px;

@@ -1,0 +1,27 @@
+# The Best Pinball: Pinball Fantasies, remade
+
+> Pinball Fantasies: Encore! is a free, open-source, native remake of Pinball Fantasies, the classic pinball game (the 1994 PC release), for Windows, macOS and Linux (it also runs on the Steam Deck). All four original tables play with the original rules and physics, under the 1994 pictures or remastered high-resolution artwork, with online high scores. Website: https://thebestpinball.com
+
+## The game
+
+- An engine of its own, written from scratch from the original game's code: the ball's physics, the table rules, the dot-matrix display and the music. Nothing is emulated, and it was checked against the original frame by frame.
+- Four tables: Party Land, Speed Devils, Billion Dollar Gameshow and Stones 'n' Bones.
+- Remastered artwork: every table redrawn at high resolution (not upscaled), with its lamps still working. F10 switches to the original 1994 pixels at any time.
+- The whole table on one screen, even on a wide screen turned on its side; a CRT look with scanlines (F9).
+- One to eight players (F1 to F8 start a game for that many).
+- It reads the original game's own files; on its first start it offers to download what it needs.
+
+## Online high scores
+
+- After a local high score the game asks whether to send it online. A recording of the whole game is sent, and the server replays it on the same engine before the score counts, so scores cannot be faked.
+- The hall of fame is on https://thebestpinball.com, by table, by number of balls and by table angle. Every recording can be downloaded and dropped on the game to watch it.
+
+## Download
+
+- Free, nothing to install: https://github.com/pedrocatalao/pinball-fantasies-encore/releases/latest (Windows x64, macOS Universal, Linux x86_64 and arm64).
+- Source code: https://github.com/pedrocatalao/pinball-fantasies-encore (code under GPL-3.0, new artwork under CC BY-SA 4.0).
+
+## About
+
+- A hobby project by Pedro Catalão, built with AI for much of the code; the artwork is stitched and aligned by hand.
+- Pinball Fantasies was made by Digital Illusions and published by 21st Century Entertainment. This is an unofficial fan project, not affiliated with them.
