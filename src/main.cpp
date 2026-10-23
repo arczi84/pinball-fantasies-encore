@@ -11,6 +11,7 @@
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <vector>
 #include <utility>
 
 #include "core/Log.h"
@@ -101,6 +102,27 @@ int main(int argc, char** argv) {
   std::set_terminate(logTerminate);
 #endif
   encore::AppOptions options;
+#ifdef __amigaos__
+  // (a script's .key ARGS/F hands the rest of its line on as one argument, "--table 2 --stats",
+  // or an empty one: split at the spaces, empty ones dropped)
+  std::vector<std::string> words;
+  for (int i = 1; i < argc; ++i) {
+    std::string w;
+    for (const char* c = argv[i]; ; ++c) {
+      if (*c == ' ' || *c == '\t' || *c == 0) {
+        if (!w.empty()) words.push_back(w);
+        w.clear();
+        if (*c == 0) break;
+      } else {
+        w += *c;
+      }
+    }
+  }
+  std::vector<char*> wordPtrs{argv[0]};
+  for (auto& w : words) wordPtrs.push_back(w.data());
+  argc = static_cast<int>(wordPtrs.size());
+  argv = wordPtrs.data();
+#endif
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> const char* { return i + 1 < argc ? argv[++i] : ""; };
