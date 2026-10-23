@@ -1,0 +1,174 @@
+From 15f3f2b5be055d3866859c4abbcfa2808b395fea Mon Sep 17 00:00:00 2001
+From: port <port@local>
+Date: Wed, 21 Oct 2026 10:51:34 +0200
+Subject: [PATCH 3/5] ogles2 fullscreen: own screen via OGLES2_CCT_MODEID
+ (fallback to SDL's screen and window mode), no title on the borderless
+ backdrop window (AfA OS drew it)
+
+---
+ SDL3/src/video/amigaos3/SDL_os3opengles2.c | 68 +++++++++++++++++++++-
+ SDL3/src/video/amigaos3/SDL_os3video.h     |  1 +
+ SDL3/src/video/amigaos3/SDL_os3window.c    |  5 +-
+ SDL3/src/video/amigaos3/SDL_os3window.h    |  3 +
+ 4 files changed, 74 insertions(+), 3 deletions(-)
+
+diff --git a/SDL3/src/video/amigaos3/SDL_os3opengles2.c b/SDL3/src/video/amigaos3/SDL_os3opengles2.c
+index 07ba223..c640665 100644
+--- a/SDL3/src/video/amigaos3/SDL_os3opengles2.c
++++ b/SDL3/src/video/amigaos3/SDL_os3opengles2.c
+@@ -34,9 +34,13 @@
+ 
+ #include <proto/exec.h>
+ #include <proto/ogles2.h> /* ogles2's libogles2.a: agl*, inline gl* */
++#include <proto/intuition.h>
++#include <proto/graphics.h>
++#include <graphics/displayinfo.h>
+ 
+ #include "SDL_os3video.h"
+ #include "SDL_os3window.h"
++#include "SDL_os3modes.h"
+ #include "SDL_os3opengles2.h"
+ #if defined(SDL_VIDEO_OPENGL)
+ #include "SDL_os3opengl.h"
+@@ -165,6 +169,61 @@ SDL_GLContext OS3_GLES2_CreateContext(SDL_VideoDevice *_this, SDL_Window *window
+         return NULL;
+     }
+     w = d->syswin;
++    /* Fullscreen: a screen of ogles2's own in the mode SDL opened (OGLES2_CCT_MODEID), drawn
++     * straight to rather than through an offscreen bitmap and ClipBlit; SDL's screen and
++     * backdrop window give way to it, and ogles2's backdrop window brings the input. */
++    if ((window->flags & SDL_WINDOW_FULLSCREEN) && d->screen && !d->external_window) {
++        const ULONG modeid = GetVPModeID(&d->screen->ViewPort);
++        struct Window *input = NULL;
++        ULONG gw = 0, gh = 0;
++        if (modeid != INVALID_ID) {
++            CloseWindow(d->syswin);
++            d->syswin = NULL;
++            d->screen = NULL;
++            OS3_CloseFullscreenScreen(_this, SDL_GetVideoDisplayForWindow(window));
++            ctx = aglCreateContextTags2(&err,
++                                        OGLES2_CCT_MODEID, modeid,
++                                        OGLES2_CCT_VSYNC, (ULONG)os3_gles2_swap_interval,
++                                        OGLES2_CCT_DEPTH, (ULONG)_this->gl_config.depth_size,
++                                        OGLES2_CCT_STENCIL, (ULONG)_this->gl_config.stencil_size,
++                                        OGLES2_CCT_PISTORM_GET_WINDOW, (ULONG)&input,
++                                        OGLES2_CCT_GET_WIDTH, (ULONG)&gw,
++                                        OGLES2_CCT_GET_HEIGHT, (ULONG)&gh,
++                                        TAG_DONE);
++            if (!ctx || !input) {
++                /* (ogles2 without screens of its own, as ogles2-uae: SDL's screen and window
++                 * again, and the window mode below) */
++                SDL_VideoDisplay *display = SDL_GetVideoDisplayForWindow(window);
++                struct Screen *screen;
++                if (ctx) aglDestroyContext(ctx);
++                ctx = NULL;
++                screen = OS3_OpenFullscreenScreen(_this, display);
++                w = screen ? OS3_OpenSystemWindow(_this, window, screen, true) : NULL;
++                if (!w) {
++                    SDL_SetError("AmigaOS3: ogles2.library could not open a screen in mode 0x%08lx (error %lu), nor SDL again",
++                                 (unsigned long)modeid, (unsigned long)err);
++                    return NULL;
++                }
++                d->syswin = w;
++                d->screen = screen;
++                goto window_mode;
++            }
++            ModifyIDCMP(input, OS3_IDCMP_FULLSCREEN);
++            d->syswin = input;
++            d->screen = input->WScreen;
++            d->gl_own_screen = true;
++            d->gl_context = (SDL_GLContext)ctx;
++            d->gl_es = true;
++            d->gl_width = (int)gw;
++            d->gl_height = (int)gh;
++            window->w = (int)gw;
++            window->h = (int)gh;
++            aglMakeCurrent(ctx);
++            glViewport(0, 0, d->gl_width, d->gl_height);
++            return (SDL_GLContext)ctx;
++        }
++    }
++window_mode:
+     if (!w->RPort || !w->RPort->BitMap || inner_w(w) <= 0 || inner_h(w) <= 0) {
+         SDL_SetError("AmigaOS3: OpenGL ES 2 needs a nonempty window");
+         return NULL;
+@@ -207,7 +266,7 @@ void OS3_GLES2_ResizeWindow(SDL_VideoDevice *_this, SDL_Window *window, int w, i
+     SDL_WindowData *d = window ? window->internal : NULL;
+     void *previous = OGLES2CurrentContext;
+     (void)_this;
+-    if (!d || !d->gl_context || !d->syswin || w <= 0 || h <= 0) {
++    if (!d || !d->gl_context || !d->syswin || d->gl_own_screen || w <= 0 || h <= 0) {
+         return;
+     }
+     if (w != d->gl_width || h != d->gl_height) {
+@@ -270,6 +329,13 @@ bool OS3_GLES2_DestroyContext(SDL_VideoDevice *_this, SDL_GLContext context)
+     for (window = _this->windows; window; window = window->next) {
+         SDL_WindowData *d = window->internal;
+         if (d && d->gl_context == context) {
++            if (d->gl_own_screen) {
++                /* ogles2's screen and window go with the context: SDL lets go of them first */
++                if (d->syswin) ModifyIDCMP(d->syswin, 0);
++                d->syswin = NULL;
++                d->screen = NULL;
++                d->gl_own_screen = false;
++            }
+             d->gl_context = NULL;
+             d->gl_es = false;
+             d->gl_width = d->gl_height = 0;
+diff --git a/SDL3/src/video/amigaos3/SDL_os3video.h b/SDL3/src/video/amigaos3/SDL_os3video.h
+index fdba360..ec6eccd 100644
+--- a/SDL3/src/video/amigaos3/SDL_os3video.h
++++ b/SDL3/src/video/amigaos3/SDL_os3video.h
+@@ -45,6 +45,7 @@ struct SDL_WindowData {
+     int gl_width, gl_height;
+     SDL_GLContext gl_context;
+     bool gl_es;           /* ogles2: gl_context is an ogles2.library context */
++    bool gl_own_screen;   /* ogles2 opened the screen and syswin (fullscreen, OGLES2_CCT_MODEID): theirs to close */
+     void *fb_pixels;
+     int fb_pitch;
+     Uint32 fb_format;
+diff --git a/SDL3/src/video/amigaos3/SDL_os3window.c b/SDL3/src/video/amigaos3/SDL_os3window.c
+index 5ea65e2..006a19e 100644
+--- a/SDL3/src/video/amigaos3/SDL_os3window.c
++++ b/SDL3/src/video/amigaos3/SDL_os3window.c
+@@ -26,7 +26,7 @@ static bool OS3_SetupData(SDL_Window *window, struct Window *syswin)
+     return true;
+ }
+ 
+-static struct Window *OS3_OpenSystemWindow(SDL_VideoDevice *_this,
++struct Window *OS3_OpenSystemWindow(SDL_VideoDevice *_this,
+                                            SDL_Window *window,
+                                            struct Screen *screen,
+                                            bool fullscreen)
+@@ -51,7 +51,7 @@ static struct Window *OS3_OpenSystemWindow(SDL_VideoDevice *_this,
+             { WA_Left, 0 }, { WA_Top, 0 },
+             { WA_Width, (ULONG)screen->Width },
+             { WA_Height, (ULONG)screen->Height },
+-            { WA_Title, (ULONG)(uintptr_t)(window->title ? window->title : "SDL3") },
++            /* No title: AfA OS draws one as a bar across a borderless backdrop window. */
+             { WA_IDCMP, OS3_IDCMP_FULLSCREEN },
+             { WA_Borderless, TRUE }, { WA_Backdrop, TRUE },
+             { WA_Activate, TRUE }, { WA_RMBTrap, TRUE },
+@@ -59,6 +59,7 @@ static struct Window *OS3_OpenSystemWindow(SDL_VideoDevice *_this,
+             { TAG_DONE, 0 }
+         };
+         w = OpenWindowTagList(NULL, tags);
++        if (w) ShowTitle(screen, FALSE);  /* (and the screen's own title bar behind it) */
+     } else {
+         SDL_VideoData *vd = (SDL_VideoData *)_this->internal;
+         int inner_w = window->windowed.w > 0 ? window->windowed.w : window->w;
+diff --git a/SDL3/src/video/amigaos3/SDL_os3window.h b/SDL3/src/video/amigaos3/SDL_os3window.h
+index 2775c0d..fc8f38d 100644
+--- a/SDL3/src/video/amigaos3/SDL_os3window.h
++++ b/SDL3/src/video/amigaos3/SDL_os3window.h
+@@ -23,4 +23,7 @@ void OS3_SetWindowAlwaysOnTop(SDL_VideoDevice *, SDL_Window *, bool);
+ bool OS3_SetWindowMouseGrab(SDL_VideoDevice *, SDL_Window *, bool);
+ bool OS3_SetWindowKeyboardGrab(SDL_VideoDevice *, SDL_Window *, bool);
+ SDL_FullscreenResult OS3_SetWindowFullscreen(SDL_VideoDevice *, SDL_Window *, SDL_VideoDisplay *, SDL_FullscreenOp);
++/* The native window for an SDL window: on `screen`, fullscreen (borderless backdrop) or not. */
++struct Window *OS3_OpenSystemWindow(SDL_VideoDevice *_this, SDL_Window *window, struct Screen *screen, bool fullscreen);
++
+ #endif
+-- 
+2.43.0
+

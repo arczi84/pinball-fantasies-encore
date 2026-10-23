@@ -3,7 +3,7 @@
 // screen or a table, both at the original's 60 frames a second.
 #include <cstdio>
 #include <filesystem>
-#include <future>
+#include "core/Thread.h"
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -41,13 +41,36 @@ struct AppOptions {
   std::optional<bool> trail;             ///< overrides the saved choice of the ball's trail
   std::optional<std::filesystem::path> hdDir;  ///< where replacement pictures are read from, instead of the fetched set
   int windowScale = 3;
+  /// The rows the replacement pictures are drawn at, at most, before the picture is stretched to
+  /// the window (0: the window's own). The Amiga's GPU is slow to fill a whole screen with them.
+#ifdef __amigaos__
+  int hdHeight = 720;
+#else
+  int hdHeight = 0;
+#endif
+  /// The pictures at the screen's own size drawn straight to it, without a scene of their own
+  /// copied there: on ogles2 that tears unless it shows the frames from screen buffers.
+  bool hdDirect = false;
+  /// The picture turned on the screen (0, 90, 270), for a screen turned on its side; else the one
+  /// remembered (F12 turns it).
+  std::optional<int> rotate;
+#ifdef __amigaos__
+  /// The frame times logged (pinball.log) on the Amiga from the start: they cost next to nothing
+  /// and say how a run went. And no question to the server at the start: the Amiga waits for the
+  /// answer (runAsync runs at once there), and its HD pictures come with it.
+  bool stats = true;
+  bool checkArt = false;
+#else
   bool stats = false;                    ///< log how long each frame takes
+  bool checkArt = true;                  ///< ask the server at the start whether it has newer HD pictures
+#endif
   std::optional<std::filesystem::path> screenshot;  ///< render one frame, save it, quit
   std::vector<std::filesystem::path> replays;  ///< recordings to play one after another, as dropped on the program
   /// Film the recordings instead, a clip of each, into this folder (ffmpeg makes the files).
   std::optional<std::filesystem::path> video;
   int videoFrom = 12, videoSeconds = 9;  ///< which seconds of each recording are filmed
   int screenshotFrame = 30;
+  double quitAfter = 0;  ///< leave the game after this many seconds (0: never), as Del would; for unattended tests
 };
 
 /// The letters the screens before the game are written with. They are the intro's own,
@@ -63,6 +86,7 @@ struct AskFont {
 class App {
  public:
   explicit App(AppOptions options);
+  ~App();
   int run();
 
  private:
@@ -88,6 +112,7 @@ class App {
   /// The frame's size, and how many of its last rows are a table's dot display (0: none).
   void resizeFrame(int width, int height, double pixelAspect, int displayRows = 0);
   void setCrt(bool on);
+  void setRotation(int degrees);
   void loadHdPictures();
   void loadFlipperPictures(int table);
   std::filesystem::path hdPicturePath(const std::string& name) const;
@@ -104,8 +129,8 @@ class App {
   AppOptions options_;
   std::filesystem::path shaderDir_, saveDir_;
   std::filesystem::path artDir_;  ///< the fetched HD pictures in use, or empty for none
-  std::future<std::optional<ArtSet>> artCheck_;  ///< the server's current set, being asked for
-  std::future<std::optional<ReleaseInfo>> releaseCheck_;  ///< the newest release, being asked for
+  Future<std::optional<ArtSet>> artCheck_;  ///< the server's current set, being asked for
+  Future<std::optional<ReleaseInfo>> releaseCheck_;  ///< the newest release, being asked for
   GameFiles files_;
   Config config_;
   Window window_;
@@ -128,7 +153,7 @@ class App {
   std::unique_ptr<encore::TableGame> table_;
   int tableIndex_ = 0;  ///< which table is open
   struct Stats {
-    double update = 0, draw = 0, wait = 0, worst = 0, seconds = 0;
+    double update = 0, picture = 0, draw = 0, wait = 0, worst = 0, seconds = 0;
     int frames = 0;
   } stats_;
   double clock_ = 0;
@@ -149,6 +174,9 @@ class App {
   int clips_ = 0, clipWidth_ = 0, clipHeight_ = 0;
   std::vector<u8> clipFrame_;
   bool running_ = true;
+  /// The Pinball Power Pack's files (tablesOnlyRelease): no intro or menu, the tables one after
+  /// another instead, Escape going on to the next.
+  bool tablesOnly_ = false;
   bool sound_ = false;            ///< a sound card is playing the music
 };
 

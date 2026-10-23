@@ -236,6 +236,7 @@ void MusicDriver::effect(u8 sample, u8 note, u8 volume, u8 channel) {
   std::lock_guard lock(mutex_);
   if (!loaded_ || channel < 1 || channel > 4) return;
   asked_.push_back({sample, note, volume, channel, stamp_});
+  statAsked_.fetch_add(1, std::memory_order_relaxed);
 }
 
 void MusicDriver::stampTime(double seconds) {
@@ -248,6 +249,7 @@ void MusicDriver::stampTime(double seconds) {
 /// same effect again starts over, as in the original: a bonus counted, a bumper hit and hit
 /// again, would otherwise pile up into a blur.
 void MusicDriver::startEffect(const Asked& a) {
+  statStarted_.fetch_add(1, std::memory_order_relaxed);
   Channel& c = ch_[a.channel - 1u];
   const bool sounding = c.data && c.position < c.end && c.loops <= 2;  // (one that loops would never end)
   const bool another = a.sample != 0 && a.sample <= 31 && c.data != samples_[a.sample - 1u].data;
@@ -504,7 +506,14 @@ void MusicDriver::mixVoiceBalanced(Channel& c, bool left, float* out, std::size_
     }
     const float* taps = &sinc[static_cast<std::size_t>(c.fraction >> (16 - kPhaseBits)) * kTaps];
     float smooth = 0;
-    for (int t = 0; t < kTaps; ++t) smooth += taps[t] * at(static_cast<int>(c.position) + t - kTaps / 2 + 1);
+    const int first = static_cast<int>(c.position) - kTaps / 2 + 1;
+    if (first >= 0 && first + kTaps <= static_cast<int>(c.end)) {
+      // (all eight inside the sample, as nearly always: read straight, the same sum)
+      const i8* d = c.data + first;
+      for (int t = 0; t < kTaps; ++t) smooth += taps[t] * static_cast<float>(d[t]);
+    } else {
+      for (int t = 0; t < kTaps; ++t) smooth += taps[t] * at(first + t);
+    }
     float s = smooth + (static_cast<float>(c.data[c.position]) - smooth) * kNearest;
     c.level += (wanted - c.level) * ease;
     s *= c.level;
@@ -551,6 +560,7 @@ void MusicDriver::renderAt(float* out, int frames, double now) {
   auto due = [&](const Asked& a) -> std::size_t {
     if (a.when < 0 || now < 0) return 0;
     const double at = std::round((a.when + helping - now) * rate_);
+    statDue_.store(static_cast<i32>(std::clamp(at, -2.0e9, 2.0e9)), std::memory_order_relaxed);
     return at <= 0 ? 0 : static_cast<std::size_t>(at);
   };
   std::size_t done = 0;
@@ -585,6 +595,7 @@ void MusicDriver::renderAt(float* out, int frames, double now) {
     done += step;
     tickFrames_ -= static_cast<double>(step);
   }
+  statWaiting_.store(static_cast<u32>(asked_.size()), std::memory_order_relaxed);
   if (balanced_.load(std::memory_order_relaxed)) tone(begin, static_cast<std::size_t>(out - begin) / 2);
   // Overlapping effects (and the tone) can add up past full scale: kept within it.
   for (float* s = begin; s != out; ++s) *s = std::clamp(*s, -1.0f, 1.0f);

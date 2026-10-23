@@ -4,7 +4,7 @@
 #include <atomic>
 #include <cctype>
 #include <string>
-#include <thread>
+#include "core/Thread.h"
 #include <system_error>
 
 #include "core/File.h"
@@ -61,7 +61,7 @@ std::optional<std::string> archiveUrl(std::string& error) {
 std::optional<Bytes> fetchWhileWaiting(std::string& url, std::string& error, const FantasyWaitTick& tick) {
   std::optional<Bytes> body;
   std::atomic<bool> done{false};
-  std::thread worker([&] {
+  Thread worker([&] {
     if (const auto where = archiveUrl(error)) {
       url = *where;
       log::info("fetching " + url);

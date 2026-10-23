@@ -1,5 +1,7 @@
 #include "gfx/Gl.h"
 
+#ifndef ENCORE_GLES2
+
 #include <SDL3/SDL_video.h>
 
 #include "core/Log.h"
@@ -24,3 +26,5 @@ bool loadGlFunctions() {
 }
 
 }  // namespace encore
+
+#endif  // ENCORE_GLES2

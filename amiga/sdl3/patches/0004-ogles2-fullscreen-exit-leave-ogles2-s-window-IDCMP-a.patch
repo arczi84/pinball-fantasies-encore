@@ -1,0 +1,54 @@
+From d122c6c7219662e7e92ae962430ed825a15b072a Mon Sep 17 00:00:00 2001
+From: port <port@local>
+Date: Wed, 21 Oct 2026 11:29:27 +0200
+Subject: [PATCH 4/5] ogles2 fullscreen exit: leave ogles2's window IDCMP and
+ port alone (Guru 0100000F on PiStorm), keep its flags, glFinish before
+ aglDestroyContext
+
+---
+ SDL3/src/video/amigaos3/SDL_os3opengles2.c | 14 +++++++++-----
+ 1 file changed, 9 insertions(+), 5 deletions(-)
+
+diff --git a/SDL3/src/video/amigaos3/SDL_os3opengles2.c b/SDL3/src/video/amigaos3/SDL_os3opengles2.c
+index c640665..8d51422 100644
+--- a/SDL3/src/video/amigaos3/SDL_os3opengles2.c
++++ b/SDL3/src/video/amigaos3/SDL_os3opengles2.c
+@@ -208,7 +208,8 @@ SDL_GLContext OS3_GLES2_CreateContext(SDL_VideoDevice *_this, SDL_Window *window
+                 d->screen = screen;
+                 goto window_mode;
+             }
+-            ModifyIDCMP(input, OS3_IDCMP_FULLSCREEN);
++            /* (ogles2's own flags kept: the window and its port are ogles2's to close) */
++            ModifyIDCMP(input, input->IDCMPFlags | OS3_IDCMP_FULLSCREEN);
+             d->syswin = input;
+             d->screen = input->WScreen;
+             d->gl_own_screen = true;
+@@ -330,8 +331,8 @@ bool OS3_GLES2_DestroyContext(SDL_VideoDevice *_this, SDL_GLContext context)
+         SDL_WindowData *d = window->internal;
+         if (d && d->gl_context == context) {
+             if (d->gl_own_screen) {
+-                /* ogles2's screen and window go with the context: SDL lets go of them first */
+-                if (d->syswin) ModifyIDCMP(d->syswin, 0);
++                /* ogles2's screen and window go with the context: SDL lets go of them first,
++                 * leaving their IDCMP and port as they are (CloseWindow is ogles2's) */
+                 d->syswin = NULL;
+                 d->screen = NULL;
+                 d->gl_own_screen = false;
+@@ -342,9 +343,12 @@ bool OS3_GLES2_DestroyContext(SDL_VideoDevice *_this, SDL_GLContext context)
+             break;
+         }
+     }
+-    if (OGLES2CurrentContext == (void *)context) {
+-        aglMakeCurrent(NULL);
++    /* the last frame finished before the context, its screen and window go */
++    if (OGLES2CurrentContext != (void *)context) {
++        aglMakeCurrent(context);
+     }
++    glFinish();
++    aglMakeCurrent(NULL);
+     aglDestroyContext(context);
+     return true;
+ }
+-- 
+2.43.0
+

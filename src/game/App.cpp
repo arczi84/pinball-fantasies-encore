@@ -10,7 +10,7 @@
 #include <memory>
 #include <optional>
 #include <string_view>
-#include <thread>
+#include "core/Thread.h"
 #include <utility>
 
 #include "core/DataMove.h"
@@ -18,6 +18,7 @@
 #include "core/File.h"
 #include "core/Log.h"
 #include "core/Png.h"
+#include "data/GameVersion.h"
 #include "game/Art.h"
 #include "game/Fantasy.h"
 #include "game/Release.h"
@@ -113,6 +114,9 @@ void putArrow(Framebuffer& fb, int x, int y, u8 index) {
 }
 
 std::filesystem::path executableDir() {
+#ifdef __amigaos__
+  return {};  // (the current folder, PROGDIR:: see programDir in platform/DataLocator.cpp)
+#endif
   const char* base = SDL_GetBasePath();
   return base ? std::filesystem::path(base) : std::filesystem::current_path();
 }
@@ -155,25 +159,55 @@ Key keyFor(SDL_Keycode k) {
 
 App::App(AppOptions options) : options_(std::move(options)), frame_(640, 480) {}
 
+// What the game holds, let go in steps, each said in the log (--verbose): the end of the program
+// is where the Amiga port has gone wrong before.
+App::~App() {
+  log::debug("leaving: sender");
+  sender_.reset();
+  log::debug("leaving: table");
+  table_.reset();
+  log::debug("leaving: intro");
+  intro_.reset();
+  log::debug("leaving: recordings and frames");
+  replay_.reset();
+  clipFrame_ = {};
+  tablePrg_ = {};
+  tableMod_ = {};
+  hd_ = {};
+  log::debug("leaving: letters and frame");
+  askFont_ = {};
+  frame_ = Framebuffer(1, 1);
+  log::debug("leaving: server answers");
+  artCheck_ = {};
+  releaseCheck_ = {};
+  log::debug("leaving: options and files");
+  config_ = {};
+  files_ = {};
+  log::debug("leaving: the rest");
+}
+
 bool App::init() {
   // Who this is, for the system: on Linux the identifier is the window's app id, which is how
   // the desktop matches the window to its menu entry and icon (see packaging/linux).
   SDL_SetAppMetadata("Pinball Fantasies: Encore!", nullptr, "org.encore.pinball-fantasies");
+  log::debug("starting SDL");
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
     log::error(std::string("SDL_Init: ") + SDL_GetError());
     return false;
   }
   // Portable (a portable.txt beside the program) is read first: the system's folder is then
   // not so much as made.
+  log::debug("finding the game's folder");
   portable_ = portableMode();
   saveDir_ = preferencesDir();
   if (portable_) log::info("portable: the game's things are in " + saveDir_.string());
   discardStaleMove(saveDir_);
+  log::debug("asking for the HD pictures and a new release");
   shaderDir_ = executableDir() / "shaders";
   // Whether the server has newer HD pictures is asked at once, so that the answer is usually
   // there by the time the question could be put.
-  if (!options_.hdDir && !options_.video && !options_.screenshot)
-    artCheck_ = std::async(std::launch::async, [] {
+  if (options_.checkArt && !options_.hdDir && !options_.video && !options_.screenshot)
+    artCheck_ = runAsync([] {
       std::string error;
       auto set = fetchArtSet(&error);
       if (!set) log::info("HD pictures: no word from the server (" + error + ")");
@@ -181,20 +215,29 @@ bool App::init() {
     });
   // And, for a release, whether there is a newer one.
   if (!thisRelease().empty() && !options_.video && !options_.screenshot)
-    releaseCheck_ = std::async(std::launch::async, [] {
+    releaseCheck_ = runAsync([] {
       std::string error;
       auto release = fetchLatestRelease(&error);
       if (!release) log::info("new release: no word from the server (" + error + ")");
       return release;
     });
 
+  log::debug("opening the window");
+  bool startFullscreen = false;
+#ifdef __amigaos__
+  // (full screen from the start, or never: Window::create)
+  {
+    const auto saved = file::readAll(saveDir_ / "fullscreen.txt");
+    startFullscreen = !options_.video && (options_.fullscreen || (saved && !saved->empty() && (*saved)[0] == '1'));
+  }
+#endif
   if (!window_.create("Pinball Fantasies: Encore!", 640 * std::max(1, options_.windowScale) / 2,
-                      480 * std::max(1, options_.windowScale) / 2))
+                      480 * std::max(1, options_.windowScale) / 2, startFullscreen))
     return false;
   // Fullscreen or in a window, as it was left last time, unless told otherwise.
   {
     const auto saved = file::readAll(saveDir_ / "fullscreen.txt");
-    if (!options_.video && (options_.fullscreen || (saved && !saved->empty() && (*saved)[0] == '1'))) {
+    if (!startFullscreen && !options_.video && (options_.fullscreen || (saved && !saved->empty() && (*saved)[0] == '1'))) {
       // macOS slides into fullscreen over about a second, stretching whatever the window last
       // showed to the shape of the screen as it goes: the first frames of the intro would be
       // seen pulled wide and then snap back. So the window shows black while it goes, and
@@ -214,11 +257,19 @@ bool App::init() {
     log::error("this computer's OpenGL is missing what the renderer needs (4.1 core)");
     return false;
   }
+  log::debug("starting the renderer");
   if (!renderer_.init(shaderDir_, 640, 480, 1.0)) return false;
+  log::debug("renderer ready");
   renderer_.setSmoothEdges(options_.smoothEdges);
+  renderer_.setHdMaxHeight(options_.hdHeight);
+  renderer_.setHdDirect(options_.hdDirect);
   {
     const auto saved = file::readAll(saveDir_ / "crt.txt");
     setCrt(options_.crt.value_or(saved && !saved->empty() && (*saved)[0] == '1'));
+  }
+  {
+    const auto saved = file::readAll(saveDir_ / "rotate.txt");
+    setRotation(options_.rotate.value_or(saved ? std::atoi(std::string(saved->begin(), saved->end()).c_str()) : 0));
   }
   // A trial: files offered on the first run and unpacked where this version keeps what is
   // its own -- the same folder as PINBALL.CFG, the high scores and the remembered settings,
@@ -237,7 +288,8 @@ bool App::init() {
     if (askFont_.width == 0 && letters != own) askFont_ = loadAskFont(own);
     // Without letters there is no way to put the question, and no question means no offer.
     if (askFont_.width == 0) log::error("the letters could not be read; not offering the download");
-    if (askFont_.width != 0 && !downloadFantasyOnce(
+    // (and not asked at all when the files are there already, put there by hand)
+    if (askFont_.width != 0 && !locateGameData(options_.dataDir) && !downloadFantasyOnce(
             saveDir_, [this] { return askToDownload(); },
             [this](double seconds) { drawWaiting(seconds, "DOWNLOADING GAME FILES"); }))
       return false;
@@ -251,6 +303,7 @@ bool App::init() {
     return false;
   }
   files_ = GameFiles::fromDirectory(*dataDir);
+  tablesOnly_ = tablesOnlyRelease(files_.directory);
   log::info("game data: " + files_.directory.string());
   // Options and high scores live in this version's own folder, never in the game folder.
   config_ = Config::load(saveDir_, files_.directory);
@@ -282,7 +335,7 @@ bool App::init() {
     ballTrail_ = options_.trail.value_or(!saved || saved->empty() || (*saved)[0] != '0');
     if (options_.trail) setBallTrail(*options_.trail);
   }
-  sound_ = audio_.open(48000);
+  sound_ = audio_.open(kSoundRate);
   // Whatever could not be sent last time goes now.
   sender_ = std::make_unique<ScoreSender>(saveDir_);
   sender_->send();
@@ -292,9 +345,17 @@ bool App::init() {
   } else if (options_.table >= 1 && options_.table <= 4) {
     openTable(options_.table - 1);
   } else {
-    openIntro(options_.skipIntro ? 0 : -1);
+    openIntro(options_.skipIntro && !tablesOnly_ ? 0 : -1);
   }
   return true;
+}
+
+/// The picture turned on the screen (0, 90 or 270 degrees), remembered for next time.
+void App::setRotation(int degrees) {
+  renderer_.setRotation(degrees);
+  const std::string text = std::to_string(renderer_.rotation());
+  file::writeAll(saveDir_ / "rotate.txt", ByteView(reinterpret_cast<const u8*>(text.data()), text.size()));
+  log::info("picture turned " + text + " degrees");
 }
 
 /// The CRT look on or off, remembered for next time.
@@ -465,6 +526,11 @@ void App::resizeFrame(int width, int height, double pixelAspect, int displayRows
 }
 
 void App::openIntro(int returningFrom) {
+  // (without an INTRO.PRG to read, the next table instead: the first at the start)
+  if (tablesOnly_) {
+    openTable(returningFrom < 0 ? 0 : (returningFrom + 1) % 4);
+    return;
+  }
   audio_.setSource({});
   table_.reset();
   replaying_ = fromReplay_ = false;
@@ -670,8 +736,23 @@ bool App::windowEvent(const SDL_Event& e) {
 void App::handleKey(const SDL_Event& e) {
   if (e.type != SDL_EVENT_KEY_DOWN && e.type != SDL_EVENT_KEY_UP) return;
   if (e.key.repeat) return;
+#ifdef __amigaos__
+  // Del leaves the game at once, from anywhere (the Amiga's keyboard has no F11 and the port no
+  // menu to quit from).
+  if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_DELETE) {
+    log::info("Del: leaving");
+    running_ = false;
+    return;
+  }
+#endif
   if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_F9) {
     setCrt(!renderer_.crt());
+    return;
+  }
+  // F12, or the Amiga's Help (SDL3_68k gives it as Scroll Lock): the picture turned for a screen on
+  // its side, 0 -> 90 -> 270 degrees (with --res tall the whole table fills such a screen)
+  if (e.type == SDL_EVENT_KEY_DOWN && (e.key.key == SDLK_F12 || e.key.key == SDLK_SCROLLLOCK)) {
+    setRotation(renderer_.rotation() == 0 ? 90 : renderer_.rotation() == 90 ? 270 : 0);
     return;
   }
   if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_F10) {
@@ -891,7 +972,7 @@ bool App::offerArt() {
   // Usually the answer is in already; if not, it is waited for a little, and otherwise asked
   // for again at the next start.
   const auto start = std::chrono::steady_clock::now();
-  while (artCheck_.wait_for(std::chrono::milliseconds(16)) != std::future_status::ready) {
+  while (artCheck_.wait_for(std::chrono::milliseconds(16)) != FutureStatus::ready) {
     const double waited = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     if (waited > 3.0) {
       log::info("HD pictures: the server is slow to answer; asking again next time");
@@ -942,7 +1023,7 @@ bool App::offerArt() {
   std::string error;
   bool fetched = false;
   std::atomic<bool> finished{false};
-  std::thread worker([&] {
+  Thread worker([&] {
     fetched = fetchArt(saveDir_, *set, have, progress, &error);
     finished = true;
   });
@@ -978,7 +1059,7 @@ bool App::offerArt() {
 bool App::offerRelease() {
   if (!releaseCheck_.valid() || askFont_.width == 0) return true;
   // The question about the pictures has usually given it all the time it needs.
-  if (releaseCheck_.wait_for(std::chrono::seconds(1)) != std::future_status::ready) return true;
+  if (releaseCheck_.wait_for(std::chrono::seconds(1)) != FutureStatus::ready) return true;
   const auto release = releaseCheck_.get();
   if (!release || !newerVersion(release->version, thisRelease())) return true;
   const std::string offered = offeredRelease(saveDir_);
@@ -997,11 +1078,17 @@ bool App::offerRelease() {
   log::info("new release " + release->version + (open ? ": opening its page, and ending" : ": not now"));
   if (!open) return true;
   // If no browser could be asked to open it, the game carries on rather than just vanishing.
+#ifdef __amigaos__
+  // (SDL3_68k cannot ask for a browser: the page is said instead)
+  log::info("the new release is at " + release->url);
+  return true;
+#else
   if (!SDL_OpenURL(release->url.c_str())) {
     log::error(std::string("cannot open the page: ") + SDL_GetError());
     return true;
   }
   return false;
+#endif
 }
 
 void App::render() {
@@ -1019,6 +1106,7 @@ void App::render() {
     resizeFrame(320, table_->screenHeight(), tablePixelAspect(*table_), encore::TableScreen::kDisplayRows);
   else if (intro_)
     resizeFrame(encore::Front::kWidth, intro_->height(), 1.0);
+  const auto beforePicture = std::chrono::steady_clock::now();
   if (table_) {
     table_->ballTrail = ballTrail_;
     table_->dotMatrixTop = dotMatrixTop_;
@@ -1031,6 +1119,7 @@ void App::render() {
   window_.drawableSize(w, h);
   renderer_.setPalette(palette_);
   const auto beforeDraw = std::chrono::steady_clock::now();
+  if (options_.stats) stats_.picture += std::chrono::duration<double, std::milli>(beforeDraw - beforePicture).count();
   renderer_.draw(frame_, w, h, &hd_);
   if (options_.video && replaying_ && replayFrame_ >= static_cast<u32>(options_.videoFrom * 60)) captureFrame(w, h);
   if (options_.screenshot && ++frameCounter_ >= options_.screenshotFrame) {
@@ -1073,6 +1162,11 @@ int App::run() {
         handleKey(e);
       }
       const auto nowT = clock::now();
+      if (options_.quitAfter > 0 && std::chrono::duration<double>(nowT - start).count() >= options_.quitAfter) {
+        log::info("--quit-after: leaving");
+        running_ = false;
+        break;
+      }
       // Filming, every drawn frame is one of the game's, however long it takes; and what comes
       // before the part filmed is played through without being drawn.
       const double dt = options_.video ? kFrame : std::min(0.1, std::chrono::duration<double>(nowT - last).count());
@@ -1091,11 +1185,18 @@ int App::run() {
         stats_.seconds += dt;
         if (++stats_.frames >= 60 && stats_.seconds > 0) {
           const double n = stats_.frames;
-          log::info("stats: " + std::to_string(n / stats_.seconds).substr(0, 5) + " frames a second, update " +
-                    std::to_string(stats_.update / n).substr(0, 4) + " ms, draw " +
+          log::stats("stats: " + std::to_string(n / stats_.seconds).substr(0, 5) + " frames a second, update " +
+                    std::to_string(stats_.update / n).substr(0, 4) + " ms, picture " +
+                    std::to_string(stats_.picture / n).substr(0, 4) + " ms, draw " +
                     std::to_string(stats_.draw / n).substr(0, 4) + " ms, waiting for the screen " +
                     std::to_string(stats_.wait / n).substr(0, 4) + " ms, longest frame " +
-                    std::to_string(stats_.worst).substr(0, 5) + " ms");
+                    std::to_string(stats_.worst).substr(0, 5) + " ms, sound " +
+                    std::to_string(100.0 * audio_.takeBusySeconds() / stats_.seconds).substr(0, 4) + "% of the time");
+          if (table_) {
+            const auto fx = table_->music().effectStats();
+            log::stats("stats: effects asked " + std::to_string(fx.asked) + ", started " + std::to_string(fx.started) +
+                      ", waiting " + std::to_string(fx.waiting) + ", last due at frame " + std::to_string(fx.lastDue));
+          }
           stats_ = {};
         }
       }
@@ -1112,14 +1213,25 @@ int App::run() {
     systemKeys(false);
     reportError(e.what());
     audio_.close();
+    renderer_.release();
+    window_.destroy();
     SDL_Quit();
     return 1;
   }
   if (clip_) endClip();
   systemKeys(false);
+  log::flushStats();
+  log::debug("leaving: sound");
   audio_.setSource({});
   audio_.close();
+  // (the pictures and shaders go while their context is there, then the window, then SDL)
+  log::debug("leaving: pictures");
+  renderer_.release();
+  log::debug("leaving: window");
+  window_.destroy();
+  log::debug("leaving: SDL");
   SDL_Quit();
+  log::debug("leaving: SDL gone");
   return 0;
 }
 
@@ -1163,7 +1275,7 @@ void App::movePortable(bool on) {
   std::atomic<std::uintmax_t> done{0};
   std::atomic<bool> finished{false};
   MoveReport report;
-  std::thread worker([&] {
+  Thread worker([&] {
     report = moveData(
         from, to,
         [&]() -> std::string {

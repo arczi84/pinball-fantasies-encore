@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <random>
 #include <string>
@@ -29,10 +31,25 @@ std::string token(const std::filesystem::path& saveDir) {
     std::string t(kept->begin(), kept->begin() + 64);
     if (std::all_of(t.begin(), t.end(), [](char c) { return std::isxdigit(static_cast<unsigned char>(c)); })) return t;
   }
-  std::random_device random;
   std::string t;
   static constexpr char kHex[] = "0123456789abcdef";
+#ifdef __amigaos__
+  // (libstdc++'s random_device is newlib's there: it looks for /dev/urandom and throws. The
+  // E-clock's nanoseconds, the time of day and where things lie in memory, mixed by splitmix64)
+  std::uint64_t x = static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()) ^
+                    (static_cast<std::uint64_t>(std::chrono::system_clock::now().time_since_epoch().count()) << 1) ^
+                    reinterpret_cast<std::uintptr_t>(&t) ^ (reinterpret_cast<std::uintptr_t>(&saveDir) << 32);
+  auto next = [&x] {
+    std::uint64_t z = (x += 0x9e3779b97f4a7c15ull);
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
+    return z ^ (z >> 31);
+  };
+  for (int i = 0; i < 64; ++i) t += kHex[next() % 16];
+#else
+  std::random_device random;
   for (int i = 0; i < 64; ++i) t += kHex[random() % 16];
+#endif
   file::writeAll(path, ByteView(reinterpret_cast<const u8*>(t.data()), t.size()));
   return t;
 }
@@ -117,7 +134,7 @@ void ScoreSender::send() {
   if (busy_->exchange(true)) return;
   if (thread_.joinable()) thread_.join();
   // Only copies go to the thread, so it may outlive this object.
-  thread_ = std::thread([dir = saveDir_, busy = busy_] {
+  thread_ = Thread([dir = saveDir_, busy = busy_] {
     sendAll(dir);
     busy->store(false);
   });

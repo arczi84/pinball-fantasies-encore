@@ -16,6 +16,46 @@
 #include "core/Log.h"
 #include "game/App.h"
 
+#ifdef __amigaos__
+#include <proto/dos.h>
+#include <cstdlib>
+#include <exception>
+
+// libnix gives the program this much stack (with swapstack.o linked: -Wl,-u,___StackSwap),
+// whatever the icon or the shell says.
+extern "C" {
+long __stack = 1024 * 1024;
+}
+
+// What the Version command reports.
+__attribute__((used)) static const char kVersionTag[] = "$VER: PinballFantasies 0.9 beta (23.10.2026)";
+
+namespace {
+// The program's folder is the current one while it runs (see programDir in
+// platform/DataLocator.cpp), and the shell's own is given back when it ends.
+BPTR g_shellDir = 0;
+void restoreShellDir() {
+  encore::log::debug("leaving: the shell's folder back");
+  CurrentDir(g_shellDir);
+}
+// An exception nobody catches ends in libnix's abort, an illegal instruction with nothing said:
+// what it was goes to the log (pinball.log) first.
+void logTerminate() {
+  std::string what = "unknown";
+  if (const std::exception_ptr e = std::current_exception()) {
+    try {
+      std::rethrow_exception(e);
+    } catch (const std::exception& x) {
+      what = x.what();
+    } catch (...) {
+    }
+  }
+  encore::log::error("uncaught exception: " + what);
+  std::abort();
+}
+}  // namespace
+#endif
+
 namespace {
 
 void usage() {
@@ -34,9 +74,16 @@ void usage() {
             "  --res <mode>     screen mode: normal (320x240), high (320x350), full (whole table) or tall\n"
             "                   (whole table with square pixels, for a screen turned on its side)\n"
             "  --scale <n>      window scale factor (default 3)\n"
+            "  --hd-height <n>  draw the HD pictures at most this many rows high, then stretch (0: the window's)\n"
+            "  --hd-direct      at the screen's size, draw the HD pictures straight to it (no copy)\n"
+            "  --rotate <deg>   turn the picture 90 (clockwise) or 270 degrees, for a screen turned on its side;\n"
+            "                   F12 (the Amiga: Help) turns it; remembered\n"
             "  --screenshot <f> render a frame to a PNG file and quit\n"
             "  --screenshot-frame <n>  which frame to capture (default 30)\n"
-            "  --stats          log how long each frame takes\n"
+            "  --stats          log how long each frame takes (the Amiga: always)\n"
+            "  --no-stats       do not\n"
+            "  --check-art      ask the server for newer HD pictures at the start (the Amiga: only then)\n"
+            "  --quit-after <s> leave after so many seconds (unattended tests)\n"
             "  <file.RPL> ...   play recordings one after another, then stay on the last one's table\n"
             "                   (also by dropping one on the program or its window)\n"
             "  --video <dir>    film the recordings instead: a silent clip of each into <dir>, by ffmpeg\n"
@@ -47,6 +94,12 @@ void usage() {
 }  // namespace
 
 int main(int argc, char** argv) {
+#ifdef __amigaos__
+  g_shellDir = CurrentDir(GetProgramDir());
+  std::atexit(encore::log::closeFile);  // (an exit() from anywhere: the log closed last)
+  std::atexit(restoreShellDir);
+  std::set_terminate(logTerminate);
+#endif
   encore::AppOptions options;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
@@ -72,9 +125,15 @@ int main(int argc, char** argv) {
                                            : encore::Resolution::High;
     }
     else if (a == "--scale") options.windowScale = std::max(1, std::atoi(next()));
+    else if (a == "--hd-height") options.hdHeight = std::max(0, std::atoi(next()));
+    else if (a == "--hd-direct") options.hdDirect = true;
+    else if (a == "--rotate") options.rotate = std::atoi(next());
     else if (a == "--screenshot") options.screenshot = next();
     else if (a == "--screenshot-frame") options.screenshotFrame = std::max(1, std::atoi(next()));
     else if (a == "--stats") options.stats = true;
+    else if (a == "--no-stats") options.stats = false;
+    else if (a == "--check-art") options.checkArt = true;
+    else if (a == "--quit-after") options.quitAfter = std::max(0.0, std::atof(next()));
     else if (a == "--verbose") encore::log::setMinimumLevel(encore::log::Level::Debug);
     else if (a == "--help" || a == "-h") { usage(); return 0; }
     else if (a.rfind("-psn", 0) == 0) { /* macOS launch services */ }
@@ -84,5 +143,13 @@ int main(int argc, char** argv) {
     else if (std::error_code ec; a[0] != '-' && std::filesystem::is_regular_file(a, ec)) options.replays.push_back(a);
     else { usage(); return 2; }
   }
-  return encore::App(std::move(options)).run();
+  int result;
+  {
+    encore::App app(std::move(options));
+    result = app.run();
+    encore::log::debug("leaving: the game's things");
+  }
+  encore::log::debug("leaving: the program");
+  encore::log::closeFile();
+  return result;
 }

@@ -39,8 +39,12 @@ GLuint compile(GLenum type, const std::string& source, std::string& error) {
 
 }  // namespace
 
-ShaderProgram::~ShaderProgram() {
+ShaderProgram::~ShaderProgram() { release(); }
+
+void ShaderProgram::release() {
   if (program_) glDeleteProgram(program_);
+  program_ = 0;
+  uniforms_.clear();
 }
 
 bool ShaderProgram::load(const std::filesystem::path& vertexPath, const std::filesystem::path& fragmentPath) {
@@ -60,6 +64,9 @@ bool ShaderProgram::compileFromFiles() {
   const GLuint prog = glCreateProgram();
   glAttachShader(prog, vs);
   glAttachShader(prog, fs);
+#ifdef ENCORE_GLES2
+  glBindAttribLocation(prog, 0, "aPos");  // (shaders/gles2: the one attribute, from a vertex buffer)
+#endif
   glLinkProgram(prog);
   glDeleteShader(vs);
   glDeleteShader(fs);
@@ -77,6 +84,7 @@ bool ShaderProgram::compileFromFiles() {
   }
   if (program_) glDeleteProgram(program_);
   program_ = prog;
+  uniforms_.clear();
   return true;
 }
 
@@ -91,6 +99,12 @@ bool ShaderProgram::reloadIfChanged() {
 
 void ShaderProgram::use() const { glUseProgram(program_); }
 
-GLint ShaderProgram::uniform(const char* name) const { return glGetUniformLocation(program_, name); }
+GLint ShaderProgram::uniform(const char* name) const {
+  for (const auto& [known, location] : uniforms_)
+    if (known == name) return location;
+  const GLint location = glGetUniformLocation(program_, name);
+  uniforms_.emplace_back(name, location);
+  return location;
+}
 
 }  // namespace encore

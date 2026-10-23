@@ -120,6 +120,16 @@ class TableScreen {
   float slideFrom_ = 0, slideX_ = 0; ///< how far short of it the roll starts, and is drawn now
   std::vector<FlipperArt> art_;
   Bytes lampAreas_;                 ///< per dot of the playfield: the lamp it belongs to, or 0
+  // How lit each dot of the playfield is for the replacement pictures (0 to HdFrame::kLitMax),
+  // for the lamps as they were last (litFor_): worked out again only when a lamp changes, not
+  // every frame (the Amiga's processor spent most of a frame on it).
+  mutable Bytes litLevels_;
+  mutable std::array<bool, 256> litFor_{};
+  mutable bool litValid_ = false;
+  mutable u32 litVersion_ = 0;
+  mutable std::array<std::array<int, 4>, 256> lampBox_{};  ///< per lamp: its dots' box (x0, y0, x1, y1 exclusive), or empty
+  mutable bool lampBoxesValid_ = false;
+  void updateLitLevels(const std::array<bool, 256>& lit) const;
   std::vector<u16> lamps_;          ///< each lamp's record of colours in the table's memory
 };
 

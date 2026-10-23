@@ -24,14 +24,22 @@ bool holdsGameFiles(const std::filesystem::path& dir) {
 bool holdsGame(const std::filesystem::path& dir) {
   if (!holdsGameFiles(dir)) return false;
   const auto bad = unsupportedGameFiles(dir);
-  if (!bad.empty()) log::info(dir.string() + " holds a different release of the game; skipping it");
-  return bad.empty();
+  if (bad.empty()) return true;
+  if (tablesOnlyRelease(dir)) {
+    log::info(dir.string() + " holds the Pinball Power Pack (1996): its tables, without the intro and the menu");
+    return true;
+  }
+  log::info(dir.string() + " holds a different release of the game; skipping it");
+  return false;
 }
 
 }  // namespace
 
 std::filesystem::path gameDataDir() {
   const std::filesystem::path prefs = preferencesDir();
+#ifdef __amigaos__
+  return prefs / "FANTASY";  // (relative: beside the program)
+#endif
   return prefs.empty() ? prefs : prefs / "FANTASY";
 }
 
@@ -47,6 +55,10 @@ std::optional<std::filesystem::path> locateGameData(const std::optional<std::fil
 std::filesystem::path preferencesDir() { return portableMode() ? programDir() : osPreferencesDir(); }
 
 std::filesystem::path osPreferencesDir() {
+#ifdef __amigaos__
+  // (everything beside the program, as Amiga programs keep it: see programDir)
+  return programDir();
+#endif
   char* base = SDL_GetPrefPath("Encore", "Pinball Fantasies");
   if (!base) return {};
   std::filesystem::path path(base);
@@ -55,6 +67,12 @@ std::filesystem::path osPreferencesDir() {
 }
 
 std::filesystem::path programDir() {
+#ifdef __amigaos__
+  // The current folder, which main() makes the program's own (PROGDIR:). An empty path, and
+  // so relative ones from it: std::filesystem joins "PROGDIR:" and "x" as "PROGDIR:/x", which
+  // AmigaDOS reads as the folder above.
+  return {};
+#endif
   const char* base = SDL_GetBasePath();
   std::filesystem::path dir = base ? std::filesystem::path(base) : std::filesystem::current_path();
   if (!dir.has_filename()) dir = dir.parent_path();  // (SDL's ends in a separator)
@@ -69,11 +87,16 @@ std::filesystem::path programDir() {
 }
 
 std::filesystem::path portableMarker() { return programDir() / "portable.txt"; }
+#ifdef __amigaos__
+// (the program's folder is the only one there is: never portable, nor anything to move)
+bool portableMode() { return false; }
+#else
 
 bool portableMode() {
   std::error_code ec;
   return std::filesystem::exists(portableMarker(), ec);
 }
+#endif
 
 namespace {
 
@@ -108,6 +131,11 @@ bool inAppFolder(const std::filesystem::path& dir) {
 }  // namespace
 
 PortableLock portableLock(bool turningOn, std::uintmax_t bytes) {
+#ifdef __amigaos__
+  // (the things are beside the program already, and there is no other place to move them to)
+  (void)turningOn, (void)bytes;
+  return PortableLock::ReadOnly;
+#endif
   const std::filesystem::path program = programDir();
 #ifdef __APPLE__
   // A quarantined application is run from a hidden copy, read-only and somewhere else each

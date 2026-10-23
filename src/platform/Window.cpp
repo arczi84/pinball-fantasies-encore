@@ -10,21 +10,38 @@
 namespace encore {
 
 Window::~Window() {
-  if (context_) SDL_GL_DestroyContext(context_);
-  if (window_) SDL_DestroyWindow(window_);
+  log::debug("leaving: the window object");
+  destroy();
 }
 
-bool Window::create(const std::string& title, int width, int height) {
+void Window::destroy() {
+  if (context_) SDL_GL_DestroyContext(context_);
+  if (window_) SDL_DestroyWindow(window_);
+  context_ = nullptr;
+  window_ = nullptr;
+}
+
+bool Window::create(const std::string& title, int width, int height, bool fullscreen) {
+#ifdef ENCORE_GLES2
+  // (on the Amiga, asking for ES 2.0 is what gives ogles2.library rather than MiniGL)
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+#else
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+#endif
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   window_ = SDL_CreateWindow(title.c_str(), width, height,
-                             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
+                             SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+                                 (fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
   if (!window_) {
     log::error(std::string("SDL_CreateWindow: ") + SDL_GetError());
     return false;
   }
+  fullscreen_ = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
+  if (fullscreen) log::info(fullscreen_ ? "full screen" : std::string("no full screen: ") + SDL_GetError());
 #ifndef __APPLE__
   // The window's icon, for the taskbar and the window list. Windows also carries one as a
   // resource for Explorer to show on the .exe; macOS takes it from the bundle, at every size,

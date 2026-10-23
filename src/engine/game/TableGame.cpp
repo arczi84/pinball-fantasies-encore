@@ -78,7 +78,7 @@ bool same(const HighScores& a, const HighScores& b) {
 }  // namespace
 
 TableGame::TableGame(ByteView prg, ByteView module, int table, const Setup& setup)
-    : options_(setup.options), music_(48000) {
+    : options_(setup.options), music_(kSoundRate) {
   engine_ = make(prg, table);
   if (setup.picture) {
     screen_ = std::make_unique<TableScreen>(Bytes(prg.begin(), prg.end()), table);

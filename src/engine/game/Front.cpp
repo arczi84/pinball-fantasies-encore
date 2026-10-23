@@ -87,7 +87,7 @@ constexpr int kOptions = 10;     ///< the original's six, and ARTWORK, AUDIO, DO
 
 Front::Front(ByteView prg, ByteView module, const Config& config, int returningFrom, PortableLock portableLock,
              bool portableError)
-    : music_(48000), options_(config.options), saved_(config.options), returningFrom_(returningFrom),
+    : music_(kSoundRate), options_(config.options), saved_(config.options), returningFrom_(returningFrom),
       portableLock_(portableLock), portableError_(portableError) {
   if (prg.size() < 0x400 + 0x4daa0) throw DataError("INTRO.PRG is not the program it should be");
   image_.assign(prg.begin() + 0x400, prg.end());

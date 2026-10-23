@@ -3,6 +3,10 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <winhttp.h>
+#elif defined(__amigaos__)
+#include <cstdlib>
+
+#include "platform/amiga/AmigaHttp.h"
 #else
 #include <dlfcn.h>
 #endif
@@ -124,6 +128,48 @@ std::optional<HttpReply> httpPost(const std::string& url, ByteView data, const s
     reply.body.resize(at + read);
   }
   return reply;
+}
+
+#elif defined(__amigaos__)
+// bsdsocket.library and AmiSSL, in C (platform/amiga/AmigaHttp.c).
+
+namespace {
+
+std::optional<HttpReply> amigaRequest(const char* method, const std::string& url, const std::string& headers,
+                                      const u8* body, std::size_t size, std::string* error) {
+  unsigned char* data = nullptr;
+  unsigned long got = 0;
+  long status = 0;
+  char why[256] = "";
+  if (!amigaHttpRequest(method, url.c_str(), headers.empty() ? nullptr : headers.c_str(), body, size, &data, &got,
+                        &status, why, sizeof why)) {
+    if (error) *error = why;
+    return std::nullopt;
+  }
+  HttpReply reply;
+  reply.status = status;
+  reply.body.assign(data, data + got);
+  std::free(data);
+  return reply;
+}
+
+}  // namespace
+
+std::optional<Bytes> httpDownload(const std::string& url, std::string* error) {
+  auto reply = amigaRequest("GET", url, {}, nullptr, 0, error);
+  if (!reply) return std::nullopt;
+  if (reply->status != 200) {
+    if (error) *error = "the server answered " + std::to_string(reply->status);
+    return std::nullopt;
+  }
+  return std::move(reply->body);
+}
+
+std::optional<HttpReply> httpPost(const std::string& url, ByteView body, const std::vector<std::string>& headers,
+                                  std::string* error) {
+  std::string lines;
+  for (const auto& h : headers) lines += h + "\r\n";
+  return amigaRequest("POST", url, lines, body.data(), body.size(), error);
 }
 
 #else

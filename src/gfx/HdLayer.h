@@ -80,6 +80,15 @@ struct HdFrame {
   int width = 0, height = 0;
   std::vector<HdPixel> map;                       ///< width x height, top row first
   std::array<std::array<u16, 2>, kCount> size{};  ///< each picture's original size
+  /// Per picture, where on the frame it is, when that is known to be a small part of it: left,
+  /// top, right, bottom (exclusive), in frame pixels; all nought: anywhere. The renderer draws
+  /// that picture's pass within it alone (a pass over the whole screen for the plunger was a
+  /// fifth of the PiStorm GPU's frame).
+  std::array<std::array<u16, 4>, kCount> box{};
+  /// A picture under nearly all of the frame (a table's playfield), or 0. Its pass is drawn
+  /// first and over the whole frame, with the frame's own colours wherever the map names
+  /// another picture or none, in place of a pass of the original colours under it all.
+  u16 basePicture = 0;
   u32 used = 0;                                   ///< bit per picture drawn this frame
   /// Per picture: 0, or how many of its rows a screen row covers when it is a strip repeated
   /// downwards (its place down the strip is then counted in the picture's own rows).
@@ -88,21 +97,35 @@ struct HdFrame {
   Rgb fadeColor{};
   std::vector<HdSprite> sprites;                  ///< drawn over the pictures, in order
   float spriteTint = 1.0f;                        ///< the screen's fade, applied to the sprites
+  /// How lit each dot of a table's whole playfield is (0 to kLitMax), when the screen keeps that
+  /// (TableScreen): the renderer reads it smoothly from a texture of its own, sent again only when
+  /// litVersion changes, instead of from the map's neighbours. A map row y is plane row
+  /// y + litRowOffset. (Without it, the lit level in each dot's picture bits is used.)
+  const u8* litPlane = nullptr;
+  int litWidth = 0, litHeight = 0;
+  u32 litVersion = 0;
+  float litRowOffset = 0;
   u8 ownSprites = 0;                              ///< bit per flipper with a picture of its own, not cut from the artwork
   bool sharedFlipper = false;                     ///< every flipper is the one picture of a bat (sprite picture 0)
   bool ballTrail = true;                          ///< draw the fading ghosts behind the ball
   u8 ballLayer = 0;                               ///< the ball is on the playfield (0) or the ramps (1)
 
-  void reset(int w, int h) {
+  void reset(int w, int h) { begin(w, h, true); }
+  /// As reset, but the map is only cleared when its size changes: for a screen that writes
+  /// every dot of it anyway (TableScreen), a megabyte less to go through each frame.
+  void begin(int w, int h, bool clearMap) {
     width = w;
     height = h;
-    map.assign(static_cast<std::size_t>(w) * h, HdPixel{});
+    if (clearMap || map.size() != static_cast<std::size_t>(w) * h) map.assign(static_cast<std::size_t>(w) * h, HdPixel{});
     used = 0;
     fade.fill(1.0f);
     rowStep.fill(0.0f);
     fadeColor = {};
     sprites.clear();
     spriteTint = 1.0f;
+    litPlane = nullptr;
+    box = {};
+    basePicture = 0;
   }
 };
 

@@ -30,4 +30,12 @@ std::vector<std::string> unsupportedGameFiles(const std::filesystem::path& dir) 
   return bad;
 }
 
+bool tablesOnlyRelease(const std::filesystem::path& dir) {
+  const auto bad = unsupportedGameFiles(dir);
+  if (bad.size() != 1 || bad[0] != "INTRO.PRG") return false;
+  const auto path = file::findCaseInsensitive(dir, "INTRO.PRG");
+  const auto bytes = path ? file::readAll(*path) : std::nullopt;
+  return bytes && sha256Hex(*bytes) == "2f6addcbf410e60abf585a3af1bbad0f6cb5a85c84af01a56a046c72eca6f98a";
+}
+
 }  // namespace encore

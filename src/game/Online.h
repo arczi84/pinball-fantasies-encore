@@ -10,7 +10,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
-#include <thread>
+#include "core/Thread.h"
 
 namespace encore {
 
@@ -38,7 +38,7 @@ class ScoreSender {
 
  private:
   std::filesystem::path saveDir_;
-  std::thread thread_;
+  Thread thread_;
   std::shared_ptr<std::atomic<bool>> busy_ = std::make_shared<std::atomic<bool>>(false);
 };
 

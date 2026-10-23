@@ -403,6 +403,8 @@ float TableScreen::flipperAngle(Engine& e, const FlipperArt& art) const {
 /// spilling past an edge, where a dot has one or two such neighbours.
 void TableScreen::buildLampAreas(Engine& e) {
   const int w = kWidth, h = TableData::kHeight;
+  litValid_ = false;
+  lampBoxesValid_ = false;
   lampAreas_.assign(static_cast<std::size_t>(w) * h, 0);
   std::array<u8, 256> ofColour{};
   lamps_.clear();
@@ -613,6 +615,49 @@ void TableScreen::colours(Engine& e, Rgb* out, int lamps) const {
   for (std::size_t i = 0; i < 256; ++i) out[i] = Rgb{wide(dac[i * 3]), wide(dac[i * 3 + 1]), wide(dac[i * 3 + 2])};
 }
 
+/// The lit level of every dot: the lit dots among the nine around it (fewer at the edges), as a
+/// part of kLitMax. The nine are summed as three across, then three of those down.
+void TableScreen::updateLitLevels(const std::array<bool, 256>& lit) const {
+  if (litValid_ && lit == litFor_) return;
+  const int w = kWidth, h = TableData::kHeight;
+  // Where each lamp's dots are, once: a lamp that changes only changes the levels in its box
+  // and a dot around it, so only those are worked out again (the whole playfield at a change
+  // was a frame missed on the PiStorm).
+  if (!lampBoxesValid_) {
+    for (auto& b : lampBox_) b = {w, h, 0, 0};
+    for (int y = 0; y < h; ++y)
+      for (int x = 0; x < w; ++x) {
+        auto& b = lampBox_[lampAreas_[static_cast<std::size_t>(y) * w + x]];
+        b = {std::min(b[0], x), std::min(b[1], y), std::max(b[2], x + 1), std::max(b[3], y + 1)};
+      }
+    lampBoxesValid_ = true;
+  }
+  auto levelsIn = [&](int x0, int y0, int x1, int y1) {
+    x0 = std::max(x0, 0), y0 = std::max(y0, 0), x1 = std::min(x1, w), y1 = std::min(y1, h);
+    for (int y = y0; y < y1; ++y)
+      for (int x = x0; x < x1; ++x) {
+        int around = 0;
+        for (int ny = std::max(y - 1, 0); ny <= std::min(y + 1, h - 1); ++ny) {
+          const u8* areas = lampAreas_.data() + static_cast<std::size_t>(ny) * w;
+          for (int nx = std::max(x - 1, 0); nx <= std::min(x + 1, w - 1); ++nx) around += lit[areas[nx]];
+        }
+        litLevels_[static_cast<std::size_t>(y) * w + x] = static_cast<u8>(around * HdFrame::kLitMax / 9);
+      }
+  };
+  if (!litValid_ || litLevels_.size() != static_cast<std::size_t>(w) * h) {
+    litLevels_.assign(static_cast<std::size_t>(w) * h, 0);
+    levelsIn(0, 0, w, h);
+  } else {
+    for (std::size_t l = 0; l < lit.size(); ++l) {
+      const auto& b = lampBox_[l];
+      if (lit[l] != litFor_[l] && b[2] > b[0]) levelsIn(b[0] - 1, b[1] - 1, b[2] + 1, b[3] + 1);
+    }
+  }
+  litFor_ = lit;
+  litValid_ = true;
+  ++litVersion_;
+}
+
 void TableScreen::draw(Engine& e, u8* frame, const View& v, HdFrame* hd) const {
   const int height = v.height, view = height - kDisplayRows, top = v.top;
   std::memset(frame, 0, static_cast<std::size_t>(kWidth) * static_cast<std::size_t>(height));
@@ -630,25 +675,32 @@ void TableScreen::draw(Engine& e, u8* frame, const View& v, HdFrame* hd) const {
     // this only has to say how lit the place is -- and it is taken over the dots around,
     // because the original's own edge is a staircase and a sharp reading of it would show
     // through as a jagged rim.
-    hd->reset(kWidth, height);
+    // (every dot of it is written below: the playfield's rows, and nothing in the others)
+    hd->begin(kWidth, height, false);
     const auto off = static_cast<u16>(static_cast<int>(HdPicture::Playfield1Off) + data_.index);
     const auto on = static_cast<u16>(static_cast<int>(HdPicture::Playfield1On) + data_.index);
     hd->used |= (1u << off) | (1u << on);
+    hd->basePicture = off;
     hd->size[off] = hd->size[on] = {static_cast<u16>(kWidth), static_cast<u16>(TableData::kHeight)};
     std::array<bool, 256> lampLit;
     lampsLit(e, v.lamps, lampLit);
+    updateLitLevels(lampLit);
+    // (the lit levels go in the map's picture bits, not as a texture of their own (HdFrame::
+    // litPlane): the lamps change nearly every frame, and on the PiStorm sending that texture
+    // each time cost more than the GPU saved)
+    for (int y = view; y < height; ++y)
+      std::fill_n(hd->map.data() + static_cast<std::size_t>(y) * kWidth, kWidth, HdPixel{});
     for (int y = 0; y < view; ++y) {
       const int row = top + y;
-      if (row < 0 || row >= TableData::kHeight) continue;
       HdPixel* out = hd->map.data() + static_cast<std::size_t>(y) * kWidth;
-      for (int x = 0; x < kWidth; ++x) {
-        int around = 0;
-        for (int ny = std::max(row - 1, 0); ny <= std::min(row + 1, TableData::kHeight - 1); ++ny)
-          for (int nx = std::max(x - 1, 0); nx <= std::min(x + 1, kWidth - 1); ++nx)
-            around += lampLit[lampAreas_[static_cast<std::size_t>(ny) * kWidth + nx]];
-        const u16 lit = static_cast<u16>(around * HdFrame::kLitMax / 9);
-        out[x] = {static_cast<u16>(x * 8), static_cast<u16>(row * 8), static_cast<u16>(off | (lit << HdFrame::kLitShift)), 0};
+      if (row < 0 || row >= TableData::kHeight) {
+        std::fill_n(out, kWidth, HdPixel{});
+        continue;
       }
+      const u8* levels = litLevels_.data() + static_cast<std::size_t>(row) * kWidth;
+      const u16 y8 = static_cast<u16>(row * 8);
+      for (int x = 0; x < kWidth; ++x)
+        out[x] = {static_cast<u16>(x * 8), y8, static_cast<u16>(off | (levels[x] << HdFrame::kLitShift)), 0};
     }
     // The renderer draws each flipper turned to its angle. One with a picture of its own has
     // the playfield's picture behind it; one cut out of the original artwork has the
@@ -686,9 +738,11 @@ void TableScreen::draw(Engine& e, u8* frame, const View& v, HdFrame* hd) const {
       hd->used |= 1u << plunger;
       hd->size[plunger] = {static_cast<u16>(width), static_cast<u16>(data_.plungerImage.size() / static_cast<std::size_t>(width))};
     }
+    int boxX0 = kWidth, boxY0 = view, boxX1 = 0, boxY1 = 0;  // (where the plunger's picture is: HdFrame::box)
     auto mark = [&](int x, int row, int px, int py) {  // a dot of the plunger's own picture, or of none
       const int y = row - top;
       if (!hd || x < 0 || x >= kWidth || y < 0 || y >= view) return;
+      if (px >= 0) boxX0 = std::min(boxX0, x), boxY0 = std::min(boxY0, y), boxX1 = std::max(boxX1, x + 1), boxY1 = std::max(boxY1, y + 1);
       HdPixel& m = hd->map[static_cast<std::size_t>(y) * kWidth + static_cast<std::size_t>(x)];
       m = px < 0 ? HdPixel{} : HdPixel{static_cast<u16>(px * 8), static_cast<u16>(py * 8), plunger, 0};
     };
@@ -703,6 +757,9 @@ void TableScreen::draw(Engine& e, u8* frame, const View& v, HdFrame* hd) const {
         put(x0 + x, row0 + down + y, data_.plungerImage[i]);
         mark(x0 + x, row0 + down + y, x, skip + y);
       }
+    // (nothing of it in view: a box of nothing, which still says "not anywhere")
+    if (hd) hd->box[plunger] = boxX1 > boxX0 ? std::array<u16, 4>{static_cast<u16>(boxX0), static_cast<u16>(boxY0), static_cast<u16>(boxX1), static_cast<u16>(boxY1)}
+                                              : std::array<u16, 4>{0, 0, 1, 1};
   }
   // the ball, but for the dots of it that something on the table passes over (cs:95b0)
   if (ball_.valid() && !hd) {
@@ -833,6 +890,8 @@ void TableScreen::draw(Engine& e, u8* frame, const View& v, HdFrame* hd) const {
     rows(frame);
     if (hd) {
       rows(hd->map.data());
+      for (auto& b : hd->box)
+        if (b[2] > b[0]) b[1] = static_cast<u16>(b[1] + kDisplayRows), b[3] = static_cast<u16>(b[3] + kDisplayRows);
       for (HdSprite& s : hd->sprites) {
         s.pivotFrameY += static_cast<float>(kDisplayRows);
         s.clipTop += static_cast<float>(kDisplayRows);

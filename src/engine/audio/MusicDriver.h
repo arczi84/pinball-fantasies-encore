@@ -21,7 +21,7 @@
 // heard at once, and the same effect again starts over, as in the original.
 #include <array>
 #include <atomic>
-#include <mutex>
+#include "core/Mutex.h"
 #include <vector>
 
 #include "engine/table/Engine.h"
@@ -41,9 +41,16 @@ class Conductor {
   virtual u8 jump(u8 place) { return place; }
 };
 
+/// The rate the sound is made at, frames a second. The Amiga port makes less of it
+/// (amiga/Makefile: ENCORE_SOUND_RATE=22050): the mixing is most of what its processor does.
+#ifndef ENCORE_SOUND_RATE
+#define ENCORE_SOUND_RATE 48000
+#endif
+constexpr int kSoundRate = ENCORE_SOUND_RATE;
+
 class MusicDriver : public SoundDriver {
  public:
-  explicit MusicDriver(int outputRate = 48000);
+  explicit MusicDriver(int outputRate = kSoundRate);
 
   /// Function 0x12: the module (a .MOD file's bytes). False if it is not one.
   bool load(ByteView mod);
@@ -85,6 +92,16 @@ class MusicDriver : public SoundDriver {
   void render(float* out, int frames);
   /// The same with no sound card: the music is moved on by this much time, unheard.
   void pass(double seconds);
+  /// For --stats: effects asked for, effects started, and where in its helping the last one
+  /// was due (frames; below nought: late).
+  struct EffectStats {
+    u32 asked = 0, started = 0, waiting = 0;
+    i32 lastDue = 0;
+  };
+  EffectStats effectStats() const {
+    return {statAsked_.load(std::memory_order_relaxed), statStarted_.load(std::memory_order_relaxed),
+            statWaiting_.load(std::memory_order_relaxed), statDue_.load(std::memory_order_relaxed)};
+  }
 
  private:
   struct Sample {
@@ -168,8 +185,10 @@ class MusicDriver : public SoundDriver {
   double stamp_ = -1;
   std::array<Voice, 1> voices_{};  ///< (so two effects at most sound at once)
   u32 voicesStarted_ = 0;
-  std::mutex mutex_;
+  Mutex mutex_;
   std::vector<float> unheard_;
+  std::atomic<u32> statAsked_{0}, statStarted_{0}, statWaiting_{0};
+  std::atomic<i32> statDue_{0};
 };
 
 }  // namespace encore

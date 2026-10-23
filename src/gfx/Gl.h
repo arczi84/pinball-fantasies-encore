@@ -8,6 +8,23 @@
 // own, and they live in this project's namespace, so the renderer's calls read as they always
 // did. The 1.1 functions (textures, clearing, drawing, the viewport) come from the platform's
 // own library, and `SDL_opengl.h` brings the types and the constants for all of them.
+#ifdef ENCORE_GLES2
+// OpenGL ES 2.0 (shaders/gles2): on AmigaOS through ogles2.library, whose functions are
+// called by their own names through its import library; elsewhere the system's GLES2.
+#if defined(__amigaos__)
+#include <proto/ogles2.h>
+#else
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
+#endif
+
+namespace encore {
+
+/// Nothing to fetch: the functions are linked.
+inline bool loadGlFunctions() { return true; }
+
+}  // namespace encore
+#else
 #include <SDL3/SDL_opengl.h>
 
 namespace encore {
@@ -52,3 +69,4 @@ ENCORE_GL_FUNCTIONS(ENCORE_GL_DECLARE)
 #undef ENCORE_GL_DECLARE
 
 }  // namespace encore
+#endif  // ENCORE_GLES2

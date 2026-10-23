@@ -3,6 +3,8 @@
 
 #include <filesystem>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace encore {
 
@@ -18,7 +20,11 @@ class ShaderProgram {
   /// Recompiles if either source file changed on disk. Returns true if reloaded.
   bool reloadIfChanged();
   void use() const;
+  /// Deletes the program now, while its context is still there; the destructor then does nothing.
+  void release();
   GLuint id() const { return program_; }
+  /// A uniform's location, asked of the driver once per name (and per program linked): ogles2
+  /// is a library call away, and the renderer asks for some thirty a frame.
   GLint uniform(const char* name) const;
 
  private:
@@ -27,6 +33,7 @@ class ShaderProgram {
   std::filesystem::path vertexPath_, fragmentPath_;
   std::filesystem::file_time_type vertexTime_{}, fragmentTime_{};
   std::string error_;
+  mutable std::vector<std::pair<std::string, GLint>> uniforms_;
 };
 
 }  // namespace encore

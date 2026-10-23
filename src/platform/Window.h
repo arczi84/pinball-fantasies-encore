@@ -13,8 +13,12 @@ class Window {
   Window(const Window&) = delete;
   Window& operator=(const Window&) = delete;
 
-  bool create(const std::string& title, int width, int height);
+  /// `fullscreen`: made so from the start. (SDL3_68k cannot take a window with a GL context
+  /// to full screen later: on the Amiga it is now or never.)
+  bool create(const std::string& title, int width, int height, bool fullscreen = false);
   void swap();
+  /// The context and the window gone now (before SDL_Quit); the destructor then does nothing.
+  void destroy();
   void setFullscreen(bool on);
   bool fullscreen() const { return fullscreen_; }
   /// While a ball is in play the keys go to the game, in a window too (see setFullscreen).

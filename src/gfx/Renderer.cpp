@@ -1,5 +1,7 @@
 #include "gfx/Renderer.h"
 
+#ifndef ENCORE_GLES2  // RendererGles2.cpp
+
 #include <algorithm>
 #include <cmath>
 
@@ -7,7 +9,9 @@
 
 namespace encore {
 
-Renderer::~Renderer() {
+Renderer::~Renderer() { release(); }
+
+void Renderer::release() {
   if (vao_) glDeleteVertexArrays(1, &vao_);
   if (indexTex_) glDeleteTextures(1, &indexTex_);
   if (paletteTex_) glDeleteTextures(1, &paletteTex_);
@@ -20,6 +24,20 @@ Renderer::~Renderer() {
     if (t) glDeleteTextures(1, &t);
   for (GLuint& t : coverTex_)
     if (t) glDeleteTextures(1, &t);
+  vao_ = indexTex_ = paletteTex_ = hdMapTex_ = 0;
+  hdTex_ = {};
+  spriteTex_ = {};
+  coverTex_ = {};
+  hdLoaded_ = 0;
+  coverLoaded_ = {};
+  spriteSize_ = {};
+  hdMapW_ = hdMapH_ = 0;
+  paletteRows_ = 0;
+  palettePass_.release();
+  postPass_.release();
+  crtPass_.release();
+  hdPass_.release();
+  spritePass_.release();
 }
 
 void Renderer::deleteTarget(Target& t) {
@@ -338,3 +356,5 @@ void Renderer::draw(const Framebuffer& frame, int windowWidth, int windowHeight,
 }
 
 }  // namespace encore
+
+#endif  // ENCORE_GLES2

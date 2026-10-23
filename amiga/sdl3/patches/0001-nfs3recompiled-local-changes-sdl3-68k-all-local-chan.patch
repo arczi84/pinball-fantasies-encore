@@ -1,0 +1,652 @@
+From 5199c4d4c275840a111464571da78dcaeee226ae Mon Sep 17 00:00:00 2001
+From: port <port@local>
+Date: Wed, 21 Oct 2026 00:33:48 +0200
+Subject: [PATCH 1/5] nfs3recompiled local changes
+ (sdl3-68k-all-local-changes.patch)
+
+---
+ SDL3/Makefile.amigaos3                        |   2 +-
+ .../build_config/SDL_build_config_amigaos3.h  |   1 +
+ SDL3/src/SDL_assert.c                         |   1 +
+ SDL3/src/SDL_hints.c                          |   2 +
+ SDL3/src/audio/SDL_audio.c                    |   7 +-
+ SDL3/src/libm/math_private.h                  |   2 +-
+ SDL3/src/stdlib/SDL_getenv.c                  |   2 +
+ SDL3/src/stdlib/SDL_malloc.c                  |   1 +
+ SDL3/src/stdlib/SDL_stdlib.c                  |   1 +
+ SDL3/src/stdlib/SDL_string.c                  |   1 +
+ SDL3/src/thread/amigaos3/SDL_syssem.c         | 107 ++++++++++++------
+ SDL3/src/timer/SDL_timer.c                    |  82 +++++++++++++-
+ SDL3/src/timer/amigaos3/SDL_systimer.c        |  50 ++++++++
+ SDL3/src/video/amigaos3/SDL_os3events.c       |   3 +-
+ SDL3/src/video/amigaos3/SDL_os3framebuffer.c  |   2 +-
+ SDL3/src/video/amigaos3/SDL_os3framebuffer.h  |   2 +-
+ SDL3/src/video/amigaos3/SDL_os3video.h        |   1 +
+ SDL3/src/video/amigaos3/SDL_os3window.c       |  47 ++++++++
+ 18 files changed, 271 insertions(+), 43 deletions(-)
+
+diff --git a/SDL3/Makefile.amigaos3 b/SDL3/Makefile.amigaos3
+index 8a3f476..6c8ac04 100644
+--- a/SDL3/Makefile.amigaos3
++++ b/SDL3/Makefile.amigaos3
+@@ -4,7 +4,7 @@ RANLIB=m68k-amigaos-ranlib
+ COMMON=-std=gnu99 -O2 -mcpu=68040 -mhard-float -Wall -Wextra -Wno-unused-parameter -I./include -I./include/build_config -I./include/SDL3 -I./src -D__AMIGAOS3__
+ CLIB2=$(COMMON) -mcrt=clib2 -DNOIXEMUL
+ LIBNIX=$(COMMON) -noixemul -DNOIXEMUL
+-SOURCES=$(wildcard ./src/*.c ./src/atomic/*.c ./src/audio/*.c ./src/audio/amigaos3/*.c ./src/camera/*.c ./src/camera/dummy/*.c ./src/cpuinfo/*.c ./src/dialog/*.c ./src/dialog/amigaos3/*.c ./src/events/*.c ./src/gpu/SDL_gpu.c ./src/haptic/*.c ./src/io/*.c ./src/io/generic/SDL_asyncio_generic.c ./src/joystick/*.c ./src/joystick/amigaos3/*.c ./src/libm/*.c ./src/loadso/dummy/*.c ./src/locale/*.c ./src/locale/amigaos3/*.c ./src/main/generic/*.c ./src/main/SDL_main_callbacks.c ./src/main/SDL_runapp.c ./src/misc/*.c ./src/power/*.c ./src/process/*.c ./src/process/dummy/*.c ./src/render/*.c ./src/render/software/*.c ./src/sensor/*.c ./src/sensor/dummy/*.c ./src/stdlib/*.c ./src/storage/SDL_storage.c ./src/storage/generic/SDL_genericstorage.c ./src/thread/*.c ./src/thread/amigaos3/*.c ./src/thread/generic/SDL_syscond.c ./src/thread/generic/SDL_sysrwlock.c ./src/time/SDL_time.c ./src/time/amigaos3/SDL_systime.c ./src/timer/*.c ./src/timer/amigaos3/*.c ./src/tray/SDL_tray_utils.c ./src/tray/dummy/*.c ./src/video/*.c ./src/video/yuv2rgb/yuv_rgb_std.c ./src/video/amigaos3/*.c ./src/video/dummy/*.c ./src/filesystem/SDL_filesystem.c ./src/filesystem/amigaos3/*.c)
++SOURCES=$(wildcard ./src/*.c ./src/atomic/*.c ./src/audio/*.c ./src/audio/amigaos3/*.c ./src/audio/dummy/*.c ./src/camera/*.c ./src/camera/dummy/*.c ./src/cpuinfo/*.c ./src/dialog/*.c ./src/dialog/amigaos3/*.c ./src/events/*.c ./src/gpu/SDL_gpu.c ./src/haptic/*.c ./src/io/*.c ./src/io/generic/SDL_asyncio_generic.c ./src/joystick/*.c ./src/joystick/amigaos3/*.c ./src/libm/*.c ./src/loadso/dummy/*.c ./src/locale/*.c ./src/locale/amigaos3/*.c ./src/main/generic/*.c ./src/main/SDL_main_callbacks.c ./src/main/SDL_runapp.c ./src/misc/*.c ./src/power/*.c ./src/process/*.c ./src/process/dummy/*.c ./src/render/*.c ./src/render/software/*.c ./src/sensor/*.c ./src/sensor/dummy/*.c ./src/stdlib/*.c ./src/storage/SDL_storage.c ./src/storage/generic/SDL_genericstorage.c ./src/thread/*.c ./src/thread/amigaos3/*.c ./src/thread/generic/SDL_syscond.c ./src/thread/generic/SDL_sysrwlock.c ./src/time/SDL_time.c ./src/time/amigaos3/SDL_systime.c ./src/timer/*.c ./src/timer/amigaos3/*.c ./src/tray/SDL_tray_utils.c ./src/tray/dummy/*.c ./src/video/*.c ./src/video/yuv2rgb/yuv_rgb_std.c ./src/video/amigaos3/*.c ./src/video/dummy/*.c ./src/filesystem/SDL_filesystem.c ./src/filesystem/amigaos3/*.c)
+ REL=$(patsubst ./%,%,$(SOURCES:.c=.o))
+ CLOBJ=$(addprefix build/clib2/,$(REL))
+ LNOBJ=$(addprefix build/libnix/,$(REL))
+diff --git a/SDL3/include/build_config/SDL_build_config_amigaos3.h b/SDL3/include/build_config/SDL_build_config_amigaos3.h
+index 25651d5..2f67f8c 100644
+--- a/SDL3/include/build_config/SDL_build_config_amigaos3.h
++++ b/SDL3/include/build_config/SDL_build_config_amigaos3.h
+@@ -63,6 +63,7 @@
+ #endif
+ #define SDL_VIDEO_RENDER_SW 1
+ #define SDL_AUDIO_DRIVER_AMIGAOS3 1
++#define SDL_AUDIO_DRIVER_DUMMY 1
+ #define SDL_JOYSTICK_AMIGAOS3 1
+ #define SDL_HAPTIC_DISABLED 1
+ #define SDL_SENSOR_DISABLED 1
+diff --git a/SDL3/src/SDL_assert.c b/SDL3/src/SDL_assert.c
+index f1f3da3..104de61 100644
+--- a/SDL3/src/SDL_assert.c
++++ b/SDL3/src/SDL_assert.c
+@@ -19,6 +19,7 @@
+   3. This notice may not be removed or altered from any source distribution.
+ */
+ #include "SDL_internal.h"
++#include <stdlib.h>
+ 
+ #if defined(SDL_PLATFORM_WINDOWS)
+ #include "core/windows/SDL_windows.h"
+diff --git a/SDL3/src/SDL_hints.c b/SDL3/src/SDL_hints.c
+index 36998c6..25b65dd 100644
+--- a/SDL3/src/SDL_hints.c
++++ b/SDL3/src/SDL_hints.c
+@@ -255,8 +255,10 @@ bool SDL_SetHint(const char *name, const char *value)
+     return SDL_SetHintWithPriority(name, value, SDL_HINT_NORMAL);
+ }
+ 
++extern void nfs_env_note(void *caller);
+ const char *SDL_GetHint(const char *name)
+ {
++    nfs_env_note(__builtin_return_address(0));
+     if (!name) {
+         return NULL;
+     }
+diff --git a/SDL3/src/audio/SDL_audio.c b/SDL3/src/audio/SDL_audio.c
+index 230515d..29a5c7a 100644
+--- a/SDL3/src/audio/SDL_audio.c
++++ b/SDL3/src/audio/SDL_audio.c
+@@ -1845,7 +1845,12 @@ static bool OpenPhysicalAudioDevice(SDL_AudioDevice *device, const SDL_AudioSpec
+ 
+     device->spec.format = (SDL_AUDIO_BITSIZE(minimum_format) >= SDL_AUDIO_BITSIZE(spec.format)) ? minimum_format : spec.format;
+     device->spec.channels = SDL_max(minimum_channels, spec.channels);
+-    device->spec.freq = SDL_max(minimum_freq, spec.freq);
++    /* NFS: with the hint set, the device opens at exactly the requested rate
++     * (AHI at the game's 22050 Hz, no SDL resampling on a 68k). */
++    if (spec.freq > 0 && SDL_GetHintBoolean("NFS_AUDIO_EXACT_RATE", false))
++        device->spec.freq = spec.freq;
++    else
++        device->spec.freq = SDL_max(minimum_freq, spec.freq);
+     device->sample_frames = SDL_GetDefaultSampleFramesFromFreq(device->spec.freq);
+     SDL_UpdatedAudioDeviceFormat(device);  // start this off sane.
+ 
+diff --git a/SDL3/src/libm/math_private.h b/SDL3/src/libm/math_private.h
+index b7d60e4..3200c3f 100644
+--- a/SDL3/src/libm/math_private.h
++++ b/SDL3/src/libm/math_private.h
+@@ -27,7 +27,7 @@
+ #define strong_alias(x, y)
+ #define weak_alias(x, y)
+ 
+-#if !defined(SDL_PLATFORM_HAIKU) && !defined(SDL_PLATFORM_PSP) && !defined(SDL_PLATFORM_3DS) && !defined(SDL_PLATFORM_PS2) /* already defined in a system header. */
++#if !defined(__AMIGAOS3__) && !defined(SDL_PLATFORM_HAIKU) && !defined(SDL_PLATFORM_PSP) && !defined(SDL_PLATFORM_3DS) && !defined(SDL_PLATFORM_PS2) /* already defined in a system header. */
+ typedef unsigned int u_int32_t;
+ #endif
+ 
+diff --git a/SDL3/src/stdlib/SDL_getenv.c b/SDL3/src/stdlib/SDL_getenv.c
+index 1ae66a4..4af88c4 100644
+--- a/SDL3/src/stdlib/SDL_getenv.c
++++ b/SDL3/src/stdlib/SDL_getenv.c
+@@ -662,7 +662,9 @@ const char *SDL_getenv_unsafe(const char *name)
+ }
+ #endif // HAVE_LIBC_ENVIRONMENT
+ 
++extern void nfs_env_note(void *caller);
+ const char *SDL_getenv(const char *name)
+ {
++    nfs_env_note(__builtin_return_address(0));
+     return SDL_GetEnvironmentVariable(SDL_GetEnvironment(), name);
+ }
+diff --git a/SDL3/src/stdlib/SDL_malloc.c b/SDL3/src/stdlib/SDL_malloc.c
+index 5fb7c1c..9cf485f 100644
+--- a/SDL3/src/stdlib/SDL_malloc.c
++++ b/SDL3/src/stdlib/SDL_malloc.c
+@@ -19,6 +19,7 @@
+   3. This notice may not be removed or altered from any source distribution.
+ */
+ #include "SDL_internal.h"
++#include <stdlib.h>
+ 
+ /* This file contains portable memory management functions for SDL */
+ 
+diff --git a/SDL3/src/stdlib/SDL_stdlib.c b/SDL3/src/stdlib/SDL_stdlib.c
+index 9bb1e50..2f20814 100644
+--- a/SDL3/src/stdlib/SDL_stdlib.c
++++ b/SDL3/src/stdlib/SDL_stdlib.c
+@@ -19,6 +19,7 @@
+   3. This notice may not be removed or altered from any source distribution.
+ */
+ #include "SDL_internal.h"
++#include <stdlib.h>
+ 
+ // This file contains portable stdlib functions for SDL
+ 
+diff --git a/SDL3/src/stdlib/SDL_string.c b/SDL3/src/stdlib/SDL_string.c
+index e07fd18..3ec8fad 100644
+--- a/SDL3/src/stdlib/SDL_string.c
++++ b/SDL3/src/stdlib/SDL_string.c
+@@ -19,6 +19,7 @@
+   3. This notice may not be removed or altered from any source distribution.
+ */
+ #include "SDL_internal.h"
++#include <stdlib.h>
+ 
+ // This file contains portable string manipulation functions for SDL
+ 
+diff --git a/SDL3/src/thread/amigaos3/SDL_syssem.c b/SDL3/src/thread/amigaos3/SDL_syssem.c
+index 04ba94e..9c67684 100644
+--- a/SDL3/src/thread/amigaos3/SDL_syssem.c
++++ b/SDL3/src/thread/amigaos3/SDL_syssem.c
+@@ -73,55 +73,94 @@ static bool OS3_RemoveWaiter(SDL_Semaphore *sem, OS3_SemWaiter *target)
+     return found;
+ }
+ 
+-static bool OS3_TimerWait(ULONG sem_mask, Sint64 timeoutNS, bool *sem_signalled)
+-{
++/* NFS3: every timed wait used to create a message port and an I/O request
++ * and open timer.device, then close it all again: hundreds of times a second
++ * (SDL's timer thread on every tick, Sleep, event waits), with 64-bit
++ * divisions on a CPU without them.  Each thread keeps one open request now,
++ * in its TLS, closed when the thread ends. */
++typedef struct OS3_TimerCache {
+     struct MsgPort *port;
+     struct timerequest *tr;
+-    ULONG wait_mask;
+-    ULONG got;
+-    Uint64 usec;
+-
+-    *sem_signalled = false;
++} OS3_TimerCache;
++static SDL_TLSID OS3_timer_tls;
+ 
+-    port = CreateMsgPort();
+-    if (!port) {
+-        return SDL_SetError("CreateMsgPort(timer.device) failed");
++static void SDLCALL OS3_FreeTimerCache(void *value)
++{
++    OS3_TimerCache *cache = (OS3_TimerCache *)value;
++    if (!cache) {
++        return;
+     }
++    CloseDevice((struct IORequest *)cache->tr);
++    DeleteIORequest((struct IORequest *)cache->tr);
++    DeleteMsgPort(cache->port);
++    SDL_free(cache);
++}
+ 
+-    tr = (struct timerequest *)CreateIORequest(port, sizeof(*tr));
+-    if (!tr) {
+-        DeleteMsgPort(port);
+-        return SDL_SetError("CreateIORequest(timer.device) failed");
++static OS3_TimerCache *OS3_GetTimerCache(void)
++{
++    OS3_TimerCache *cache = (OS3_TimerCache *)SDL_GetTLS(&OS3_timer_tls);
++    if (cache) {
++        return cache;
+     }
+-
+-    if (OpenDevice(TIMERNAME, UNIT_MICROHZ, (struct IORequest *)tr, 0) != 0) {
+-        DeleteIORequest((struct IORequest *)tr);
+-        DeleteMsgPort(port);
+-        return SDL_SetError("OpenDevice(timer.device) failed");
++    cache = (OS3_TimerCache *)SDL_calloc(1, sizeof(*cache));
++    if (!cache) {
++        return NULL;
++    }
++    cache->port = CreateMsgPort();
++    cache->tr = cache->port ? (struct timerequest *)CreateIORequest(cache->port, sizeof(*cache->tr)) : NULL;
++    if (!cache->tr || OpenDevice(TIMERNAME, UNIT_MICROHZ, (struct IORequest *)cache->tr, 0) != 0) {
++        if (cache->tr) {
++            DeleteIORequest((struct IORequest *)cache->tr);
++        }
++        if (cache->port) {
++            DeleteMsgPort(cache->port);
++        }
++        SDL_free(cache);
++        SDL_SetError("timer.device for a timed wait failed");
++        return NULL;
+     }
++    SDL_SetTLS(&OS3_timer_tls, cache, OS3_FreeTimerCache);
++    return cache;
++}
++
++static bool OS3_TimerWait(ULONG sem_mask, Sint64 timeoutNS, bool *sem_signalled)
++{
++    OS3_TimerCache *cache = OS3_GetTimerCache();
++    struct timerequest *tr;
++    ULONG port_mask;
++    ULONG got;
+ 
+-    usec = ((Uint64)timeoutNS + 999ULL) / 1000ULL;
++    *sem_signalled = false;
++    if (!cache) {
++        return false;
++    }
++    tr = cache->tr;
++    port_mask = 1UL << cache->port->mp_SigBit;
++
++    /* Up to 4.29 s (nearly every wait) in 32-bit arithmetic. */
++    if (timeoutNS <= 0xffffffffLL) {
++        const ULONG ns = (ULONG)timeoutNS;
++        const ULONG usec = ns / 1000U + (ns % 1000U ? 1U : 0U);
++        tr->tr_time.tv_secs = usec / 1000000U;
++        tr->tr_time.tv_micro = usec % 1000000U;
++    } else {
++        const Uint64 usec = ((Uint64)timeoutNS + 999ULL) / 1000ULL;
++        tr->tr_time.tv_secs = (ULONG)(usec / 1000000ULL);
++        tr->tr_time.tv_micro = (ULONG)(usec % 1000000ULL);
++    }
+     tr->tr_node.io_Command = TR_ADDREQUEST;
+-    tr->tr_time.tv_secs = (ULONG)(usec / 1000000ULL);
+-    tr->tr_time.tv_micro = (ULONG)(usec % 1000000ULL);
++    SetSignal(0, port_mask);  /* a reply from an earlier wait left the bit set */
+     SendIO((struct IORequest *)tr);
+ 
+-    wait_mask = sem_mask | (1UL << port->mp_SigBit);
+-    got = Wait(wait_mask);
++    got = Wait(sem_mask | port_mask);
+ 
+     if (got & sem_mask) {
+         *sem_signalled = true;
+-        if (!CheckIO((struct IORequest *)tr)) {
+-            AbortIO((struct IORequest *)tr);
+-        }
+-        WaitIO((struct IORequest *)tr);
+-    } else {
+-        WaitIO((struct IORequest *)tr);
+     }
+-
+-    CloseDevice((struct IORequest *)tr);
+-    DeleteIORequest((struct IORequest *)tr);
+-    DeleteMsgPort(port);
++    if (!CheckIO((struct IORequest *)tr)) {
++        AbortIO((struct IORequest *)tr);
++    }
++    WaitIO((struct IORequest *)tr);
+     return true;
+ }
+ 
+diff --git a/SDL3/src/timer/SDL_timer.c b/SDL3/src/timer/SDL_timer.c
+index 5fc4573..1afc083 100644
+--- a/SDL3/src/timer/SDL_timer.c
++++ b/SDL3/src/timer/SDL_timer.c
+@@ -21,6 +21,9 @@
+ #include "SDL_internal.h"
+ 
+ #include "SDL_timer_c.h"
++#if defined(__mc68040__)
++#include <port/counter_scale.h>
++#endif
+ #include "../thread/SDL_systhread.h"
+ 
+ // #define DEBUG_TIMERS
+@@ -105,6 +108,12 @@ static int SDLCALL SDL_TimerThread(void *_data)
+     SDL_Timer *freelist_head = NULL;
+     SDL_Timer *freelist_tail = NULL;
+     Uint64 tick, now, interval, delay;
++    /* NFS: a clock read is 16 us on the PiStorm (the E clock is a CIA, over the
++     * Amiga's bus), and a one-shot timer armed again from its callback cost
++     * five a fire.  A pass straight after the last one (the semaphore was
++     * already up) takes the last reading as its tick, and a pass that ran no
++     * callback ends on its tick. */
++    bool known = false;
+ 
+     /* Threaded timer loop:
+      *  1. Queue timers added by other threads
+@@ -144,7 +153,9 @@ static int SDLCALL SDL_TimerThread(void *_data)
+         // Initial delay if there are no timers
+         delay = (Uint64)-1;
+ 
+-        tick = SDL_GetTicksNS();
++        tick = known ? now : SDL_GetTicksNS();
++        known = false;
++        bool ran = false;
+ 
+         // Process all the pending timers for this tick
+         while (data->timers) {
+@@ -162,6 +173,7 @@ static int SDLCALL SDL_TimerThread(void *_data)
+             if (SDL_GetAtomicInt(&current->canceled)) {
+                 interval = 0;
+             } else {
++                ran = true;
+                 if (current->callback_ms) {
+                     interval = SDL_MS_TO_NS(current->callback_ms(current->userdata, current->timerID, (Uint32)SDL_NS_TO_MS(current->interval)));
+                 } else {
+@@ -188,7 +200,7 @@ static int SDLCALL SDL_TimerThread(void *_data)
+         }
+ 
+         // Adjust the delay based on processing time
+-        now = SDL_GetTicksNS();
++        now = ran ? SDL_GetTicksNS() : tick;
+         interval = (now - tick);
+         if (interval > delay) {
+             delay = 0;
+@@ -201,7 +213,11 @@ static int SDLCALL SDL_TimerThread(void *_data)
+            That's okay, it just means we run through the loop a few
+            extra times.
+          */
+-        SDL_WaitSemaphoreTimeoutNS(data->sem, delay);
++        if (SDL_TryWaitSemaphore(data->sem)) {
++            known = true;
++        } else {
++            SDL_WaitSemaphoreTimeoutNS(data->sem, delay);
++        }
+     }
+     return 0;
+ }
+@@ -540,6 +556,11 @@ typedef unsigned __int128 Uint128;
+ #endif
+ 
+ static Uint64 tick_start;
++static unsigned char nfs_fast_preview_ticks;
++void NFS_AmigaUseFastPreviewTicks(int enabled)
++{
++    __atomic_store_n(&nfs_fast_preview_ticks,enabled!=0,__ATOMIC_RELAXED);
++}
+ #ifdef USE_128BIT_MATH
+ static Uint64 tick_numerator_ns;
+ static Uint64 tick_numerator_ms;
+@@ -637,15 +658,50 @@ void SDL_QuitTicks(void)
+     tick_start = 0;
+ }
+ 
++
++/* NFS: the game sets this from -intticks to keep SDL's original integer
++ * conversion; otherwise the counter is scaled on the FPU. */
++int nfs_sdl_int_ticks = 0;
++static int nfs_fpu_ticks(void)
++{
++    return !nfs_sdl_int_ticks;
++}
++
++/* NFS: Uint64 <-> double through two 32-bit halves.  The 68k FPU converts
++ * only signed 32-bit integers; a plain cast of a Uint64 is a libgcc routine
++ * (__floatundidf, __fixunsdfdi) of a hundred instructions, on every tick. */
++static SDL_INLINE double nfs_u64_to_double(Uint64 v)
++{
++    const Uint32 hi = (Uint32)(v >> 32), lo = (Uint32)v;
++    return (double)(Sint32)hi * 4294967296.0 + ((double)(Sint32)(lo ^ 0x80000000u) + 2147483648.0);
++}
++static SDL_INLINE Uint64 nfs_double_to_u64(double d)  /* 0 <= d < 2^63 */
++{
++    const Sint32 hi = (Sint32)(d * (1.0 / 4294967296.0));
++    const double rest = d - (double)hi * 4294967296.0;  /* [0, 2^32) */
++    const Uint32 lo = rest >= 2147483648.0 ? ((Uint32)(Sint32)(rest - 2147483648.0) ^ 0x80000000u) : (Uint32)(Sint32)rest;
++    return ((Uint64)(Uint32)hi << 32) | lo;
++}
++extern void nfs_clock_note(void *caller);
+ Uint64 SDL_GetTicksNS(void)
+ {
+     Uint64 starting_value, value;
++    nfs_clock_note(__builtin_return_address(0));
+ 
+     if (!tick_start) {
+         SDL_InitTicks();
+     }
+ 
+     starting_value = (SDL_GetPerformanceCounter() - tick_start);
++#if defined(__mc68040__) && !defined(USE_128BIT_MATH)
++    /* NFS: the 64/32 integer divisions (__udivdi3/__umoddi3) were a tenth of
++     * a 68k frame.  The 68060 has no 64-bit DIVU.L, so the counter is scaled
++     * on the FPU instead: a double holds the counter exactly for centuries and
++     * the product is monotonic. */
++    (void)nfs_fast_preview_ticks;
++    if (nfs_fpu_ticks())
++        return nfs_double_to_u64(nfs_u64_to_double(starting_value) * (nfs_u64_to_double(tick_numerator_ns) / nfs_u64_to_double(tick_denominator_ns)));
++#endif
+ #ifdef USE_128BIT_MATH
+     value = (Uint64)(((Uint128)starting_value * tick_numerator_ns) >> 32);
+ #else
+@@ -655,15 +711,35 @@ Uint64 SDL_GetTicksNS(void)
+     return value;
+ }
+ 
++/* NFS Classic preview-only entry: same epoch and integer conversion as SDL,
++ * with one hardware quotient/remainder operation for each 64/32 division. */
++Uint64 NFS_AmigaGetTicksNSFast(void)
++{
++    nfs_clock_note(__builtin_return_address(0));
++#if defined(__mc68040__) && !defined(USE_128BIT_MATH)
++    if (!tick_start) SDL_InitTicks();
++    if (!tick_denominator_ns) return SDL_GetTicksNS();
++    return nfs_scale_counter(SDL_GetPerformanceCounter()-tick_start,
++                             tick_numerator_ns,tick_denominator_ns);
++#else
++    return SDL_GetTicksNS();
++#endif
++}
++
+ Uint64 SDL_GetTicks(void)
+ {
+     Uint64 starting_value, value;
++    nfs_clock_note(__builtin_return_address(0));
+ 
+     if (!tick_start) {
+         SDL_InitTicks();
+     }
+ 
+     starting_value = (SDL_GetPerformanceCounter() - tick_start);
++#if defined(__mc68040__) && !defined(USE_128BIT_MATH)
++    if (nfs_fpu_ticks())
++        return nfs_double_to_u64(nfs_u64_to_double(starting_value) * (nfs_u64_to_double(tick_numerator_ms) / nfs_u64_to_double(tick_denominator_ms)));
++#endif
+ #ifdef USE_128BIT_MATH
+     value = (Uint64)(((Uint128)starting_value * tick_numerator_ms) >> 32);
+ #else
+diff --git a/SDL3/src/timer/amigaos3/SDL_systimer.c b/SDL3/src/timer/amigaos3/SDL_systimer.c
+index 3b8c1ee..0e46c54 100644
+--- a/SDL3/src/timer/amigaos3/SDL_systimer.c
++++ b/SDL3/src/timer/amigaos3/SDL_systimer.c
+@@ -82,10 +82,60 @@ bool OS3_GetSystemTime1978(Uint64 *seconds, Uint32 *microseconds)
+     return true;
+ }
+ 
++/* NFS3: clock reads made, for the race report (a read is a trip to the CIA). */
++volatile unsigned long nfs_clock_reads = 0;
++
++/* NFS3: who reads the clock, by return address (a small open table; the
++ * race report lists the busiest). */
++#define NFS_CLOCK_CALLERS 64
++static void *nfs_clock_caller[NFS_CLOCK_CALLERS];
++static unsigned long nfs_clock_count[NFS_CLOCK_CALLERS];
++void nfs_clock_note(void *caller)
++{
++    unsigned i = ((unsigned long)caller >> 1) % NFS_CLOCK_CALLERS, n;
++    for (n = 0; n < NFS_CLOCK_CALLERS; ++n, i = (i + 1) % NFS_CLOCK_CALLERS) {
++        if (nfs_clock_caller[i] == caller) { ++nfs_clock_count[i]; return; }
++        if (!nfs_clock_caller[i]) { nfs_clock_caller[i] = caller; nfs_clock_count[i] = 1; return; }
++    }
++}
++/* The same for SDL_getenv and SDL_GetHint: each takes the environment's or
++ * the hints' locks, Exec semaphores. */
++static void *nfs_env_caller[NFS_CLOCK_CALLERS];
++static unsigned long nfs_env_count[NFS_CLOCK_CALLERS];
++void nfs_env_note(void *caller)
++{
++    unsigned i = ((unsigned long)caller >> 1) % NFS_CLOCK_CALLERS, n;
++    for (n = 0; n < NFS_CLOCK_CALLERS; ++n, i = (i + 1) % NFS_CLOCK_CALLERS) {
++        if (nfs_env_caller[i] == caller) { ++nfs_env_count[i]; return; }
++        if (!nfs_env_caller[i]) { nfs_env_caller[i] = caller; nfs_env_count[i] = 1; return; }
++    }
++}
++unsigned nfs_env_callers(void **callers, unsigned long *counts, unsigned max, int reset)
++{
++    unsigned i, n = 0;
++    for (i = 0; i < NFS_CLOCK_CALLERS && n < max; ++i)
++        if (nfs_env_caller[i]) { callers[n] = nfs_env_caller[i]; counts[n++] = nfs_env_count[i]; }
++    if (reset)
++        for (i = 0; i < NFS_CLOCK_CALLERS; ++i) { nfs_env_caller[i] = 0; nfs_env_count[i] = 0; }
++    return n;
++}
++unsigned nfs_clock_callers(void **callers, unsigned long *counts, unsigned max, int reset)
++{
++    unsigned i, n = 0;
++    for (i = 0; i < NFS_CLOCK_CALLERS && n < max; ++i)
++        if (nfs_clock_caller[i]) { callers[n] = nfs_clock_caller[i]; counts[n++] = nfs_clock_count[i]; }
++    if (reset)
++        for (i = 0; i < NFS_CLOCK_CALLERS; ++i) { nfs_clock_caller[i] = 0; nfs_clock_count[i] = 0; }
++    return n;
++}
++
+ Uint64 SDL_GetPerformanceCounter(void)
+ {
+     struct EClockVal now;
+ 
++    ++nfs_clock_reads;
++    nfs_clock_note(__builtin_return_address(0));
++
+     if (!OS3_InitEClock()) {
+         return 0;
+     }
+diff --git a/SDL3/src/video/amigaos3/SDL_os3events.c b/SDL3/src/video/amigaos3/SDL_os3events.c
+index 9d1207a..7821d1b 100644
+--- a/SDL3/src/video/amigaos3/SDL_os3events.c
++++ b/SDL3/src/video/amigaos3/SDL_os3events.c
+@@ -1,4 +1,5 @@
+ #include "SDL_internal.h"
++#include "../../events/SDL_windowevents_c.h"
+ 
+ #if SDL_VIDEO_DRIVER_AMIGAOS3
+ 
+@@ -21,7 +22,7 @@ void OS3_PumpEvents(SDL_VideoDevice *_this)
+         SDL_WindowData *d = sw->internal;
+         struct IntuiMessage *m;
+ 
+-        if (!d || !d->syswin || !d->syswin->UserPort || d->external_window) {
++        if (!d || !d->syswin || !d->syswin->UserPort || (d->external_window && !d->pump_external)) {
+             continue;
+         }
+ 
+diff --git a/SDL3/src/video/amigaos3/SDL_os3framebuffer.c b/SDL3/src/video/amigaos3/SDL_os3framebuffer.c
+index e132119..026823f 100644
+--- a/SDL3/src/video/amigaos3/SDL_os3framebuffer.c
++++ b/SDL3/src/video/amigaos3/SDL_os3framebuffer.c
+@@ -1,7 +1,7 @@
+ #include "SDL_internal.h"
+ #if SDL_VIDEO_DRIVER_AMIGAOS3
+ #include "SDL_os3framebuffer.h"
+-bool OS3_CreateWindowFramebuffer(SDL_VideoDevice *_this, SDL_Window *window, Uint32 *format, void **pixels, int *pitch)
++bool OS3_CreateWindowFramebuffer(SDL_VideoDevice *_this, SDL_Window *window, SDL_PixelFormat *format, void **pixels, int *pitch)
+ {
+     SDL_WindowData*d=window->internal;(void)_this;if(!d||!d->syswin)return SDL_SetError("AmigaOS3: no native window");
+     if(d->fb_pixels) SDL_free(d->fb_pixels); d->fb_format=SDL_PIXELFORMAT_ARGB8888; d->fb_pitch=window->w*4;
+diff --git a/SDL3/src/video/amigaos3/SDL_os3framebuffer.h b/SDL3/src/video/amigaos3/SDL_os3framebuffer.h
+index 0efd817..904f033 100644
+--- a/SDL3/src/video/amigaos3/SDL_os3framebuffer.h
++++ b/SDL3/src/video/amigaos3/SDL_os3framebuffer.h
+@@ -1,7 +1,7 @@
+ #ifndef SDL_os3framebuffer_h_
+ #define SDL_os3framebuffer_h_
+ #include "SDL_os3video.h"
+-bool OS3_CreateWindowFramebuffer(SDL_VideoDevice *, SDL_Window *, Uint32 *, void **, int *);
++bool OS3_CreateWindowFramebuffer(SDL_VideoDevice *, SDL_Window *, SDL_PixelFormat *, void **, int *);
+ bool OS3_UpdateWindowFramebuffer(SDL_VideoDevice *, SDL_Window *, const SDL_Rect *, int);
+ void OS3_DestroyWindowFramebuffer(SDL_VideoDevice *, SDL_Window *);
+ #endif
+diff --git a/SDL3/src/video/amigaos3/SDL_os3video.h b/SDL3/src/video/amigaos3/SDL_os3video.h
+index cf2c071..235d48c 100644
+--- a/SDL3/src/video/amigaos3/SDL_os3video.h
++++ b/SDL3/src/video/amigaos3/SDL_os3video.h
+@@ -41,6 +41,7 @@ struct SDL_WindowData {
+     struct Screen *screen;
+     bool owns_screen;
+     bool external_window; /* native window and screen are borrowed */
++    bool pump_external;   /* NFS: an external window with an adopted MiniGL context: SDL pumps its input */
+     int gl_width, gl_height;
+     SDL_GLContext gl_context;
+     void *fb_pixels;
+diff --git a/SDL3/src/video/amigaos3/SDL_os3window.c b/SDL3/src/video/amigaos3/SDL_os3window.c
+index 87e023a..5ea65e2 100644
+--- a/SDL3/src/video/amigaos3/SDL_os3window.c
++++ b/SDL3/src/video/amigaos3/SDL_os3window.c
+@@ -1,4 +1,5 @@
+ #include "SDL_internal.h"
++#include "../../events/SDL_windowevents_c.h"
+ 
+ #if SDL_VIDEO_DRIVER_AMIGAOS3
+ 
+@@ -154,6 +155,20 @@ bool OS3_CreateWindow(SDL_VideoDevice *_this, SDL_Window *window, SDL_Properties
+             return SDL_SetError("AmigaOS3: native window has no drawable area");
+         if (!OS3_SetupData(window, w)) return false;
+         window->internal->external_window = true;
++        /* NFS: a MiniGL context the application created itself on this
++         * window (MiniGL's own fullscreen screen, mglChooseWindowMode(GL_FALSE))
++         * becomes the window's context, so SDL_GL_MakeCurrent/SwapWindow work. */
++        {
++            void *context = SDL_GetPointerProperty(props, "SDL.window.create.amigaos3.glcontext", NULL);
++            if (context) {
++                window->internal->pump_external = true;
++                ModifyIDCMP(w, OS3_IDCMP_FULLSCREEN);
++                ActivateWindow(w);
++                window->internal->gl_context = (SDL_GLContext)context;
++                window->internal->gl_width = w->Width - w->BorderLeft - w->BorderRight;
++                window->internal->gl_height = w->Height - w->BorderTop - w->BorderBottom;
++            }
++        }
+         window->flags |= SDL_WINDOW_EXTERNAL;
+         window->flags &= ~(SDL_WINDOW_HIDDEN | SDL_WINDOW_FULLSCREEN);
+         window->x = w->LeftEdge;
+@@ -508,3 +523,35 @@ void OS3_RaiseWindow(SDL_VideoDevice *_this, SDL_Window *window)
+ }
+ 
+ #endif
++
++/* NFS: the application's own MiniGL fullscreen screen is closed and opened
++ * again at another size (menus at 640x480, a race at its resolution).  Detach
++ * drops the native window before MiniGL closes it, so nothing pumps a dead
++ * window; replace puts the new window and context under the same SDL window. */
++void SDL_OS3_NFS_DetachExternalWindow(SDL_Window *window)
++{
++    SDL_WindowData *d = window ? window->internal : NULL;
++    if (!d || !d->external_window) return;
++    d->syswin = NULL;
++    d->screen = NULL;
++    d->gl_context = NULL;
++}
++
++void SDL_OS3_NFS_ReplaceExternalWindow(SDL_Window *window, struct Window *w, void *context)
++{
++    SDL_WindowData *d = window ? window->internal : NULL;
++    if (!d || !d->external_window || !w) return;
++    d->syswin = w;
++    d->screen = w->WScreen;
++    d->gl_context = (SDL_GLContext)context;
++    d->gl_width = w->Width - w->BorderLeft - w->BorderRight;
++    d->gl_height = w->Height - w->BorderTop - w->BorderBottom;
++    d->pump_external = true;
++    ModifyIDCMP(w, OS3_IDCMP_FULLSCREEN);
++    ActivateWindow(w);
++    window->x = w->LeftEdge;
++    window->y = w->TopEdge;
++    window->w = d->gl_width;
++    window->h = d->gl_height;
++    SDL_SendWindowEvent(window, SDL_EVENT_WINDOW_RESIZED, window->w, window->h);
++}
+-- 
+2.43.0
+

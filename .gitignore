@@ -27,3 +27,13 @@ re/*
 server/node_modules/
 server/.wrangler/
 server/.dev.vars
+# The Amiga port: builds, test programs and anything with the game's files in it
+amiga/build/
+amiga/build*/
+amiga/PinballFantasies
+amiga/PinballFantasies[0-9]*
+amiga/*.zip
+amiga/FANTASY/
+build-amiga/
+# SDL3_68k is fetched and patched by amiga/sdl3/fetch-sdl3.sh
+third_party/SDL3_68k/

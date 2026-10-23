@@ -104,7 +104,7 @@ class TableGame {
   /// The lamps as the game has them (0), all lit (1) or all out (2): for looking at the artwork.
   void showLamps(int how) { lamps_ = how; }
 
-  /// The next of the sound, for the sound card (48000 a second, left and right), which moves
+  /// The next of the sound, for the sound card (kSoundRate frames a second, left and right), which moves
   /// the music on by asking; from its thread.
   void sound(float* out, int frames);
   /// With no sound card, a frame's worth of the music is played to nobody instead.
