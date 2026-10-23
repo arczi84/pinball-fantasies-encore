@@ -232,7 +232,7 @@ bool App::init() {
   }
 #endif
   if (!window_.create("Pinball Fantasies: Encore!", 640 * std::max(1, options_.windowScale) / 2,
-                      480 * std::max(1, options_.windowScale) / 2, startFullscreen))
+                      480 * std::max(1, options_.windowScale) / 2, startFullscreen, options_.screenW, options_.screenH))
     return false;
   // Fullscreen or in a window, as it was left last time, unless told otherwise.
   {

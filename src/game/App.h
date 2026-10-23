@@ -51,6 +51,7 @@ struct AppOptions {
   /// The pictures at the screen's own size drawn straight to it, without a scene of their own
   /// copied there: on ogles2 that tears unless it shows the frames from screen buffers.
   bool hdDirect = false;
+  int screenW = 0, screenH = 0;  ///< --screen WxH: full screen in that screen mode (the nearest), not the desktop's
   /// The picture turned on the screen (0, 90, 270), for a screen turned on its side; else the one
   /// remembered (F12 turns it).
   std::optional<int> rotate;

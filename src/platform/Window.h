@@ -15,7 +15,8 @@ class Window {
 
   /// `fullscreen`: made so from the start. (SDL3_68k cannot take a window with a GL context
   /// to full screen later: on the Amiga it is now or never.)
-  bool create(const std::string& title, int width, int height, bool fullscreen = false);
+  /// screenW x screenH (not 0): full screen in the screen mode nearest that size, not the desktop's.
+  bool create(const std::string& title, int width, int height, bool fullscreen = false, int screenW = 0, int screenH = 0);
   void swap();
   /// The context and the window gone now (before SDL_Quit); the destructor then does nothing.
   void destroy();

@@ -21,7 +21,7 @@ void Window::destroy() {
   window_ = nullptr;
 }
 
-bool Window::create(const std::string& title, int width, int height, bool fullscreen) {
+bool Window::create(const std::string& title, int width, int height, bool fullscreen, int screenW, int screenH) {
 #ifdef ENCORE_GLES2
   // (on the Amiga, asking for ES 2.0 is what gives ogles2.library rather than MiniGL)
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
@@ -42,6 +42,20 @@ bool Window::create(const std::string& title, int width, int height, bool fullsc
   }
   fullscreen_ = (SDL_GetWindowFlags(window_) & SDL_WINDOW_FULLSCREEN) != 0;
   if (fullscreen) log::info(fullscreen_ ? "full screen" : std::string("no full screen: ") + SDL_GetError());
+  // A screen mode of its own (--screen): set before the GL context, which on the Amiga takes the
+  // screen as it is then.
+  if (fullscreen_ && screenW > 0 && screenH > 0) {
+    SDL_DisplayMode mode;
+    if (SDL_GetClosestFullscreenDisplayMode(SDL_GetDisplayForWindow(window_), screenW, screenH, 0.0f, false, &mode) &&
+        SDL_SetWindowFullscreenMode(window_, &mode)) {
+      SDL_SyncWindow(window_);
+      log::info("screen mode " + std::to_string(mode.w) + "x" + std::to_string(mode.h) + " (asked for " +
+                std::to_string(screenW) + "x" + std::to_string(screenH) + ")");
+    } else {
+      log::info(std::string("no screen mode near ") + std::to_string(screenW) + "x" + std::to_string(screenH) +
+                ": the desktop's (" + SDL_GetError() + ")");
+    }
+  }
 #ifndef __APPLE__
   // The window's icon, for the taskbar and the window list. Windows also carries one as a
   // resource for Explorer to show on the .exe; macOS takes it from the bundle, at every size,

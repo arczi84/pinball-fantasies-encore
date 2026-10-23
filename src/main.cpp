@@ -77,6 +77,7 @@ void usage() {
             "  --scale <n>      window scale factor (default 3)\n"
             "  --hd-height <n>  draw the HD pictures at most this many rows high, then stretch (0: the window's)\n"
             "  --hd-direct      at the screen's size, draw the HD pictures straight to it (no copy)\n"
+            "  --screen WxH     full screen in the screen mode nearest WxH (1280x720, 1920x1080...)\n"
             "  --rotate <deg>   turn the picture 90 (clockwise) or 270 degrees, for a screen turned on its side;\n"
             "                   F12 (the Amiga: Help) turns it; remembered\n"
             "  --screenshot <f> render a frame to a PNG file and quit\n"
@@ -149,6 +150,14 @@ int main(int argc, char** argv) {
     else if (a == "--scale") options.windowScale = std::max(1, std::atoi(next()));
     else if (a == "--hd-height") options.hdHeight = std::max(0, std::atoi(next()));
     else if (a == "--hd-direct") options.hdDirect = true;
+    else if (a == "--screen") {
+      const std::string m = next();
+      const auto x = m.find_first_of("xX");
+      if (x != std::string::npos) {
+        options.screenW = std::max(0, std::atoi(m.substr(0, x).c_str()));
+        options.screenH = std::max(0, std::atoi(m.substr(x + 1).c_str()));
+      }
+    }
     else if (a == "--rotate") options.rotate = std::atoi(next());
     else if (a == "--screenshot") options.screenshot = next();
     else if (a == "--screenshot-frame") options.screenshotFrame = std::max(1, std::atoi(next()));
