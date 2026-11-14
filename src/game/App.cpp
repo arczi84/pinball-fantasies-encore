@@ -268,8 +268,8 @@ bool App::init() {
     setCrt(options_.crt.value_or(saved && !saved->empty() && (*saved)[0] == '1'));
   }
   {
-    const auto saved = file::readAll(saveDir_ / "rotate.txt");
-    setRotation(options_.rotate.value_or(saved ? std::atoi(std::string(saved->begin(), saved->end()).c_str()) : 0));
+    // (straight unless --rotate says otherwise: nothing is remembered from the last run)
+    setRotation(options_.rotate.value_or(0));
   }
   // A trial: files offered on the first run and unpacked where this version keeps what is
   // its own -- the same folder as PINBALL.CFG, the high scores and the remembered settings,
@@ -350,12 +350,10 @@ bool App::init() {
   return true;
 }
 
-/// The picture turned on the screen (0, 90 or 270 degrees), remembered for next time.
+/// The picture turned on the screen (0, 90 or 270 degrees), for this run only.
 void App::setRotation(int degrees) {
   renderer_.setRotation(degrees);
-  const std::string text = std::to_string(renderer_.rotation());
-  file::writeAll(saveDir_ / "rotate.txt", ByteView(reinterpret_cast<const u8*>(text.data()), text.size()));
-  log::info("picture turned " + text + " degrees");
+  log::info("picture turned " + std::to_string(renderer_.rotation()) + " degrees");
 }
 
 /// The CRT look on or off, remembered for next time.
