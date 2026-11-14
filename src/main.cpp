@@ -79,7 +79,7 @@ void usage() {
             "  --hd-direct      at the screen's size, draw the HD pictures straight to it (no copy)\n"
             "  --screen WxH     full screen in the screen mode nearest WxH (1280x720, 1920x1080...)\n"
             "  --rotate <deg>   turn the picture 90 (clockwise) or 270 degrees, for a screen turned on its side;\n"
-            "                   F12 (the Amiga: Help) turns it; remembered\n"
+            "                   F12 (the Amiga: Help) turns it; not remembered: without it the picture is straight\n"
             "  --screenshot <f> render a frame to a PNG file and quit\n"
             "  --screenshot-frame <n>  which frame to capture (default 30)\n"
             "  --stats          log how long each frame takes (the Amiga: always)\n"
