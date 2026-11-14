@@ -43,13 +43,17 @@ class Renderer {
     displayRows_ = rows;
     displayAtTop_ = atTop;
   }
-  /// Presents the picture through the CRT-Lottes shader (shaders/crt-lottes.frag).
-  void setCrt(bool on) { crt_ = on; }
+  /// Presents the picture through the CRT-Lottes shader (shaders/crt-lottes.frag). Where that
+  /// shader cannot be used (it does not compile or link: on the Pi 3 and Zero 2 W it is too big
+  /// for the GPU), the CRT look stays off and the picture is shown without it; crt() says which.
+  void setCrt(bool on) { crt_ = on && crtReady(); }
   bool crt() const { return crt_; }
   /// A high-resolution replacement for one of the original pictures, RGBA.
   void setHdPicture(HdPicture p, int width, int height, const u8* rgba);
   bool hasHdPictures() const { return hdLoaded_ != 0; }
-  void setHdEnabled(bool on) { hdEnabled_ = on; }
+  /// The replacement pictures on or off. Off, whatever is asked, where their shader (hd.frag)
+  /// cannot be used: the original pictures are shown instead; hdEnabled() says which.
+  void setHdEnabled(bool on) { hdEnabled_ = on && (hdLoaded_ == 0 || hdReady()); }
   /// A picture drawn over the scene at an angle (a flipper), RGBA; `slot` is HdSprite::picture.
   void setSpritePicture(std::size_t slot, int width, int height, const u8* rgba);
   /// What hides the ball, drawn to the table's replacement pictures (black hides it, white
@@ -81,6 +85,10 @@ class Renderer {
   static void ensureTarget(Target& t, int w, int h);
   static void deleteTarget(Target& t);
   void drawHd(const HdFrame& hd);
+  /// The CRT and replacement-picture programs, loaded the first time they are wanted: whether
+  /// there is one to draw with. One that fails is said in the log once and not tried again.
+  bool crtReady();
+  bool hdReady();
   void drawSprites(const HdFrame& hd);
   GLuint vao_ = 0;
   GLuint indexTex_ = 0;

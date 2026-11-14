@@ -361,9 +361,11 @@ void App::setRotation(int degrees) {
 /// The CRT look on or off, remembered for next time.
 void App::setCrt(bool on) {
   renderer_.setCrt(on);
+  // (what was asked for is remembered, so that the same disk on a GPU that can draw it has it)
   const char c = on ? '1' : '0';
   file::writeAll(saveDir_ / "crt.txt", ByteView(reinterpret_cast<const u8*>(&c), 1));
-  log::info(std::string("CRT look ") + (on ? "on" : "off"));
+  if (on && !renderer_.crt()) log::info("CRT look not available on this GPU; the plain picture");
+  else log::info(std::string("CRT look ") + (on ? "on" : "off"));
 }
 
 /// High-resolution replacements for the intro's pictures, named after HdPicture
@@ -476,7 +478,8 @@ void App::setHd(bool on) {
   renderer_.setHdEnabled(on);
   const char c = on ? '1' : '0';
   file::writeAll(saveDir_ / "hd.txt", ByteView(reinterpret_cast<const u8*>(&c), 1));
-  log::info(std::string("replacement pictures ") + (on ? "on" : "off"));
+  if (on && !renderer_.hdEnabled()) log::info("replacement pictures not available on this GPU; the original pictures");
+  else log::info(std::string("replacement pictures ") + (on ? "on" : "off"));
   showLooks();
 }
 

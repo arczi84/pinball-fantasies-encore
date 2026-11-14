@@ -196,6 +196,24 @@ void Renderer::drawSprites(const HdFrame& hd) {
   glActiveTexture(GL_TEXTURE0);
 }
 
+bool Renderer::crtReady() {
+  if (!crtLoaded_) {
+    crtLoaded_ = true;
+    if (!crtPass_.load(shaderDir_ / "fullscreen.vert", shaderDir_ / "crt-lottes.frag"))
+      log::error("the CRT shader cannot be used on this GPU (it did not compile or link); showing the picture without it");
+  }
+  return crtPass_.id() != 0;
+}
+
+bool Renderer::hdReady() {
+  if (!hdPassLoaded_) {
+    hdPassLoaded_ = true;
+    if (!hdPass_.load(shaderDir_ / "fullscreen.vert", shaderDir_ / "hd.frag"))
+      log::error("the replacement-picture shader cannot be used on this GPU (it did not compile or link); showing the original pictures");
+  }
+  return hdPass_.id() != 0;
+}
+
 void Renderer::setHdPicture(HdPicture p, int width, int height, const u8* rgba) {
   const auto i = static_cast<std::size_t>(p);
   if (!hdTex_[i]) glGenTextures(1, &hdTex_[i]);
@@ -212,15 +230,11 @@ void Renderer::setHdPicture(HdPicture p, int width, int height, const u8* rgba) 
 }
 
 void Renderer::drawHd(const HdFrame& hd) {
-  if (!hdPassLoaded_) {
-    hdPassLoaded_ = true;
-    if (!hdPass_.load(shaderDir_ / "fullscreen.vert", shaderDir_ / "hd.frag")) {
-      log::error("the replacement-picture shader failed to load; showing the original pictures");
-      hdEnabled_ = false;
-      return;
-    }
+  // (gone off here when the shader is first tried and fails; the next frame is drawn without)
+  if (!hdReady()) {
+    hdEnabled_ = false;
+    return;
   }
-  if (!hdPass_.id()) return;
   glActiveTexture(GL_TEXTURE2);
   if (!hdMapTex_) glGenTextures(1, &hdMapTex_);
   glBindTexture(GL_TEXTURE_2D, hdMapTex_);
@@ -296,6 +310,9 @@ void Renderer::draw(const Framebuffer& frame, int windowWidth, int windowHeight,
   if (vh > windowHeight) { vh = windowHeight; vw = static_cast<int>(std::lround(windowHeight * targetAspect)); }
   viewport_ = {(windowWidth - vw) / 2, (windowHeight - vh) / 2, vw, vh};
 
+  // (the CRT shader tried before anything depends on it; where it fails, the plain picture)
+  if (crt_ && !crtReady()) crt_ = false;
+
   // Pass 1: palette lookup into the scene texture: native resolution, or the window's when
   // replacement pictures are drawn into it (pass 1b).
   const bool withHd = hdEnabled_ && hd && (hd->used & hdLoaded_) && hd->width == frameW_ && hd->height == frameH_;
@@ -324,13 +341,6 @@ void Renderer::draw(const Framebuffer& frame, int windowWidth, int windowHeight,
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT);
   glViewport(viewport_.x, viewport_.y, viewport_.w, viewport_.h);
-  if (crt_ && !crtLoaded_) {
-    crtLoaded_ = true;
-    if (!crtPass_.load(shaderDir_ / "fullscreen.vert", shaderDir_ / "crt-lottes.frag")) {
-      log::error("the CRT shader failed to load; showing the picture without it");
-      crt_ = false;
-    }
-  }
   if (crt_) {
     crtPass_.use();
     glActiveTexture(GL_TEXTURE0);
