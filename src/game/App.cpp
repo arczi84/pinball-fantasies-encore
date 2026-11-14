@@ -257,6 +257,14 @@ bool App::init() {
     log::error("this computer's OpenGL is missing what the renderer needs (4.1 core)");
     return false;
   }
+  // Black at once, in both of the screen's buffers: until the first frame (shaders compiled,
+  // the game's files and the HD pictures read, seconds on the Amiga) the screen would show
+  // whatever it opened with -- grey on the Amiga.
+  glClearColor(0, 0, 0, 1);
+  for (int i = 0; i < 2; ++i) {
+    glClear(GL_COLOR_BUFFER_BIT);
+    window_.swap();
+  }
   log::debug("starting the renderer");
   if (!renderer_.init(shaderDir_, 640, 480, 1.0)) return false;
   log::debug("renderer ready");
